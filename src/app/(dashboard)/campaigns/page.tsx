@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Megaphone, Loader2, MoreHorizontal, Pencil,
-  Trash2, Link2, Eye
+  Trash2, Link2, Eye, Copy
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -123,10 +123,16 @@ export default function CampaignsPage() {
             {campaigns.length} de {planLimits.campaigns === Infinity ? '∞' : planLimits.campaigns} campañas
           </p>
         </div>
-        <Button onClick={() => router.push('/campaigns/new')}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva campaña con IA
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push('/campaigns/bulk-create')}>
+            <Copy className="h-4 w-4 mr-2" />
+            Creación masiva
+          </Button>
+          <Button onClick={() => router.push('/campaigns/new')}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nueva campaña con IA
+          </Button>
+        </div>
       </div>
 
       {campaigns.length === 0 ? (

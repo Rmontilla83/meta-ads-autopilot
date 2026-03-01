@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { MetaAdsClient } from '@/lib/meta/client';
 import { decrypt } from '@/lib/encryption';
+import { evaluateAllRules } from '@/lib/automation/engine';
 
 function extractConversions(actions: Array<{ action_type: string; value: string }> | undefined): number {
   if (!actions) return 0;
@@ -183,6 +184,13 @@ export async function GET(request: Request) {
         }
         console.error(`Error syncing user ${conn.user_id}:`, userError);
       }
+    }
+
+    // Evaluate automation rules after metrics sync
+    try {
+      await evaluateAllRules();
+    } catch (rulesError) {
+      console.error('Error evaluating automation rules:', rulesError);
     }
 
     return NextResponse.json({ message: 'Sync complete', synced: totalSynced });

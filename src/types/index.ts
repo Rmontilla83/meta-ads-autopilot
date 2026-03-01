@@ -73,6 +73,8 @@ export interface PlanLimits {
   monthlySpend: number;
   adAccounts: number;
   aiSuggestions: number;
+  automationRules: number;
+  bulkCampaigns: number;
   support: string;
 }
 
@@ -219,4 +221,67 @@ export interface CampaignDetailMetrics {
   };
   adSets: (CampaignAdSet & { metrics?: { impressions: number; clicks: number; spend: number; ctr: number } })[];
   ads: (CampaignAd & { metrics?: { impressions: number; clicks: number; spend: number; ctr: number } })[];
+}
+
+// Phase 4: Automation, Notifications & Templates
+
+export interface AutomationRule {
+  id: string;
+  user_id: string;
+  name: string;
+  is_enabled: boolean;
+  condition_metric: string;
+  condition_operator: 'gt' | 'lt' | 'gte' | 'lte' | 'eq';
+  condition_value: number;
+  condition_period: 'last_1_day' | 'last_3_days' | 'last_7_days' | 'last_14_days' | 'last_30_days';
+  campaign_ids: string[];
+  action_type: 'pause_campaign' | 'activate_campaign' | 'increase_budget' | 'decrease_budget' | 'notify_only';
+  action_value: number;
+  frequency: 'hourly' | 'daily' | 'weekly';
+  max_executions: number;
+  total_executions: number;
+  last_executed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RuleExecution {
+  id: string;
+  rule_id: string;
+  user_id: string;
+  campaign_id: string | null;
+  campaign_name: string | null;
+  action_taken: string;
+  metric_value: number;
+  threshold_value: number;
+  success: boolean;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: 'rule_executed' | 'campaign_published' | 'campaign_error' | 'budget_alert' | 'performance_alert' | 'system';
+  title: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  is_read: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignTemplate {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  template_data: Record<string, unknown>;
+  industry: string | null;
+  objective: string | null;
+  is_public: boolean;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
 }

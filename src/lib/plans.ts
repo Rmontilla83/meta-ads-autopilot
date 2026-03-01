@@ -9,6 +9,8 @@ export const PLANS: Record<string, { name: string; price: number; limits: PlanLi
       monthlySpend: 500,
       adAccounts: 1,
       aiSuggestions: 10,
+      automationRules: 2,
+      bulkCampaigns: 5,
       support: 'comunidad',
     },
     features: [
@@ -27,6 +29,8 @@ export const PLANS: Record<string, { name: string; price: number; limits: PlanLi
       monthlySpend: 5000,
       adAccounts: 3,
       aiSuggestions: 100,
+      automationRules: 10,
+      bulkCampaigns: 20,
       support: 'email',
     },
     features: [
@@ -45,6 +49,8 @@ export const PLANS: Record<string, { name: string; price: number; limits: PlanLi
       monthlySpend: 50000,
       adAccounts: 10,
       aiSuggestions: -1, // unlimited
+      automationRules: 50,
+      bulkCampaigns: 100,
       support: 'prioritario',
     },
     features: [
@@ -63,6 +69,8 @@ export const PLANS: Record<string, { name: string; price: number; limits: PlanLi
       monthlySpend: -1,
       adAccounts: -1,
       aiSuggestions: -1,
+      automationRules: -1,
+      bulkCampaigns: -1,
       support: 'dedicado',
     },
     features: [

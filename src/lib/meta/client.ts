@@ -210,6 +210,14 @@ export class MetaAdsClient {
   async updateAdStatus(adId: string, status: string): Promise<{ success: boolean }> {
     return this.post(`/${adId}`, { status });
   }
+
+  async updateCampaignBudget(campaignId: string, dailyBudgetCents: number): Promise<{ success: boolean }> {
+    return this.post(`/${campaignId}`, { daily_budget: dailyBudgetCents });
+  }
+
+  async updateAdSetBudget(adSetId: string, dailyBudgetCents: number): Promise<{ success: boolean }> {
+    return this.post(`/${adSetId}`, { daily_budget: dailyBudgetCents });
+  }
 }
 
 export async function getMetaClientForUser(userId: string): Promise<MetaAdsClient> {

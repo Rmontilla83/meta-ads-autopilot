@@ -15,6 +15,7 @@ import {
   Link2,
   User,
   CreditCard,
+  Bot,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -57,6 +58,11 @@ const sidebarItems: SidebarItem[] = [
         title: 'Perfil',
         href: '/settings/profile',
         icon: <User className="h-4 w-4" />,
+      },
+      {
+        title: 'Automatización',
+        href: '/settings/automation-rules',
+        icon: <Bot className="h-4 w-4" />,
       },
       {
         title: 'Facturación',

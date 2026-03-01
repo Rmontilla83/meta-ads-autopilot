@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getMetaClientForUser } from '@/lib/meta/client';
 import { CampaignPublisher, type PublishProgress } from '@/lib/meta/publisher';
+import { createNotification } from '@/lib/notifications';
 import type { GeneratedCampaign } from '@/lib/gemini/types';
 
 export async function POST(request: Request) {
@@ -75,6 +76,14 @@ export async function POST(request: Request) {
         })
         .eq('id', campaign_id);
 
+      await createNotification({
+        user_id: user.id,
+        type: 'campaign_published',
+        title: 'Campaña publicada',
+        message: `Tu campaña "${campaign.name}" se publicó exitosamente en Meta Ads.`,
+        metadata: { campaign_id, meta_campaign_id: result.meta_campaign_id },
+      });
+
       return NextResponse.json({
         success: true,
         meta_campaign_id: result.meta_campaign_id,
@@ -85,6 +94,14 @@ export async function POST(request: Request) {
         .from('campaigns')
         .update({ status: 'error' })
         .eq('id', campaign_id);
+
+      await createNotification({
+        user_id: user.id,
+        type: 'campaign_error',
+        title: 'Error al publicar',
+        message: `La campaña "${campaign.name}" no pudo publicarse: ${result.error}`,
+        metadata: { campaign_id, error: result.error },
+      });
 
       return NextResponse.json({
         success: false,
