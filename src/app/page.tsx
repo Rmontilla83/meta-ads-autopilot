@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Zap,
   BarChart3,
@@ -157,34 +158,53 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="container mx-auto px-4 py-20 md:py-32 text-center">
-        <Badge variant="secondary" className="mb-6">
-          Potenciado por Inteligencia Artificial
-        </Badge>
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight max-w-4xl mx-auto">
-          Automatiza tus campañas de{' '}
-          <span className="text-primary">Meta Ads</span>{' '}
-          con IA
-        </h1>
-        <p className="text-lg md:text-xl text-muted-foreground mt-6 max-w-2xl mx-auto">
-          Crea, gestiona y optimiza tus campañas de Facebook e Instagram Ads de forma
-          inteligente. Maximiza tu ROI mientras ahorras tiempo.
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
-          <Link href="/register">
-            <Button size="lg" className="gap-2 text-lg px-8">
-              Comenzar Gratis <ArrowRight className="h-5 w-5" />
-            </Button>
-          </Link>
-          <a href="#features">
-            <Button size="lg" variant="outline" className="text-lg px-8">
-              Ver Funciones
-            </Button>
-          </a>
+      <section className="relative min-h-[600px] md:min-h-[700px] flex items-center justify-center overflow-hidden">
+        {/* Background image */}
+        <Image
+          src="/images/hero-bg.webp"
+          alt=""
+          fill
+          priority
+          loading="eager"
+          className="object-cover object-center"
+          sizes="100vw"
+        />
+        {/* Overlay — darker on mobile for legibility */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/60 to-black/90 md:from-black/70 md:via-black/50 md:to-black/80" />
+
+        {/* Content */}
+        <div className="relative z-10 container mx-auto px-4 py-20 md:py-32 text-center">
+          <Badge className="mb-6 bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/30">
+            Potenciado por Inteligencia Artificial
+          </Badge>
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight max-w-4xl mx-auto text-white">
+            Automatiza tus campañas de{' '}
+            <span className="text-amber-400">Meta Ads</span>{' '}
+            con IA
+          </h1>
+          <p className="text-lg md:text-xl text-white/75 mt-6 max-w-2xl mx-auto">
+            Crea, gestiona y optimiza tus campañas de Facebook e Instagram Ads de forma
+            inteligente. Maximiza tu ROI mientras ahorras tiempo.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
+            <Link href="/register">
+              <Button size="lg" className="gap-2 text-lg px-8 bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+                Comenzar Gratis <ArrowRight className="h-5 w-5" />
+              </Button>
+            </Link>
+            <a href="#features">
+              <Button size="lg" variant="outline" className="text-lg px-8 border-white/30 text-white hover:bg-white/10">
+                Ver Funciones
+              </Button>
+            </a>
+          </div>
+          <p className="text-sm text-white/50 mt-4">
+            Sin tarjeta de crédito. Configura en menos de 5 minutos.
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground mt-4">
-          Sin tarjeta de crédito. Configura en menos de 5 minutos.
-        </p>
+
+        {/* Bottom fade to page background */}
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent" />
       </section>
 
       {/* 3 Steps */}
