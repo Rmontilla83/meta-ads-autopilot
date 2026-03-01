@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Megaphone, Loader2, MoreHorizontal, Pencil,
-  Trash2, Play, Pause, AlertCircle, Link2
+  Trash2, Link2, Eye
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -196,6 +196,12 @@ export default function CampaignsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => router.push(`/campaigns/${campaign.id}`)}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              Ver detalles
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => router.push(`/campaigns/${campaign.id}/edit`)}
                             >

@@ -1,78 +1,107 @@
 'use client';
 
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { createClient } from '@/lib/supabase/client';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BarChart3, Megaphone, DollarSign, TrendingUp, Link2 } from 'lucide-react';
+import { Link2, Plus, Loader2, DollarSign, Users, MousePointer, Target } from 'lucide-react';
+import { KpiCard } from '@/components/dashboard/kpi-card';
+import { MetricsChart } from '@/components/dashboard/metrics-chart';
+import { CampaignCard } from '@/components/dashboard/campaign-card';
+import { AiInsights } from '@/components/dashboard/ai-insights';
+import type { Campaign, DashboardKPIs, DailyMetric } from '@/types';
 
 export default function DashboardPage() {
-  const { profile, businessProfile, metaConnection, loading } = useUser();
+  const router = useRouter();
+  const { profile, metaConnection, loading: userLoading } = useUser();
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
+  const [timeSeries, setTimeSeries] = useState<DailyMetric[]>([]);
+  const [dateRange, setDateRange] = useState('7d');
+  const [loading, setLoading] = useState(true);
 
-  if (loading) {
+  const fetchData = useCallback(async (range: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/analytics/dashboard?dateRange=${range}`);
+      if (res.ok) {
+        const data = await res.json();
+        setKpis(data.kpis);
+        setTimeSeries(data.timeSeries);
+      }
+    } catch {
+      // Silently fail — will show empty state
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (userLoading) return;
+
+    const loadCampaigns = async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('campaigns')
+        .select('*')
+        .in('status', ['active', 'paused', 'publishing'])
+        .order('updated_at', { ascending: false })
+        .limit(10);
+      if (data) setCampaigns(data);
+    };
+
+    if (metaConnection?.is_active) {
+      loadCampaigns();
+      fetchData(dateRange);
+    } else {
+      setLoading(false);
+    }
+  }, [userLoading, metaConnection, dateRange, fetchData]);
+
+  const handleDateRangeChange = (range: string) => {
+    setDateRange(range);
+    fetchData(range);
+  };
+
+  const handleToggleStatus = async (campaignId: string, newStatus: string) => {
+    try {
+      const res = await fetch('/api/campaigns/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entityId: campaignId, entityType: 'campaign', status: newStatus }),
+      });
+      if (res.ok) {
+        const { status } = await res.json();
+        setCampaigns(prev => prev.map(c =>
+          c.id === campaignId ? { ...c, status } : c
+        ));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  if (userLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">
-          ¡Hola, {profile?.full_name?.split(' ')[0] || 'Usuario'}!
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Aquí tienes un resumen de tus campañas de Meta Ads.
-        </p>
-      </div>
-
-      {/* Quick stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Campañas Activas</CardTitle>
-            <Megaphone className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">de {metaConnection ? 'tus campañas' : 'conecta Meta'}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Inversión del Mes</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">$0.00</div>
-            <p className="text-xs text-muted-foreground">USD este mes</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Impresiones</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">últimos 30 días</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">CTR Promedio</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0%</div>
-            <p className="text-xs text-muted-foreground">click-through rate</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Banner if Meta not connected */}
-      {!metaConnection && (
+  // No Meta connection
+  if (!metaConnection?.is_active) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">
+            ¡Hola, {profile?.full_name?.split(' ')[0] || 'Usuario'}!
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Conecta tu cuenta de Meta para comenzar.
+          </p>
+        </div>
         <Card className="border-primary/50 bg-primary/5">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -89,7 +118,141 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
         </Card>
+      </div>
+    );
+  }
+
+  // No campaigns
+  if (!loading && campaigns.length === 0 && !kpis) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">
+            ¡Hola, {profile?.full_name?.split(' ')[0] || 'Usuario'}!
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Crea tu primera campaña para ver métricas aquí.
+          </p>
+        </div>
+        <Card>
+          <CardHeader className="text-center py-12">
+            <CardTitle>Crea tu primera campaña con IA</CardTitle>
+            <CardDescription>
+              Nuestro asistente de IA te ayudará a crear una campaña optimizada en minutos.
+            </CardDescription>
+            <div className="mt-4">
+              <Button onClick={() => router.push('/campaigns/new')}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nueva campaña con IA
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  // Full dashboard
+  const activeCampaignIds = campaigns
+    .filter(c => c.status === 'active' && c.meta_campaign_id)
+    .map(c => c.id);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">
+          ¡Hola, {profile?.full_name?.split(' ')[0] || 'Usuario'}!
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Aquí tienes un resumen de tus campañas de Meta Ads.
+        </p>
+      </div>
+
+      {/* KPI Cards */}
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <div className="p-4 animate-pulse">
+                <div className="h-4 bg-muted rounded w-24 mb-3" />
+                <div className="h-8 bg-muted rounded w-16" />
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : kpis && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <KpiCard
+            title="Inversión"
+            value={`$${kpis.spend.toFixed(2)}`}
+            change={kpis.spendChange}
+            icon={DollarSign}
+            sparklineData={timeSeries.map(d => d.spend)}
+          />
+          <KpiCard
+            title="Alcance"
+            value={kpis.reach.toLocaleString()}
+            change={kpis.reachChange}
+            icon={Users}
+            sparklineData={timeSeries.map(d => d.reach)}
+          />
+          <KpiCard
+            title="Clicks"
+            value={kpis.clicks.toLocaleString()}
+            change={kpis.clicksChange}
+            icon={MousePointer}
+            sparklineData={timeSeries.map(d => d.clicks)}
+          />
+          <KpiCard
+            title="Conversiones"
+            value={kpis.conversions.toLocaleString()}
+            change={kpis.conversionsChange}
+            icon={Target}
+            sparklineData={timeSeries.map(d => d.conversions)}
+          />
+        </div>
       )}
+
+      {/* Metrics Chart */}
+      {!loading && timeSeries.length > 0 && (
+        <MetricsChart
+          data={timeSeries}
+          dateRange={dateRange}
+          onDateRangeChange={handleDateRangeChange}
+        />
+      )}
+
+      {/* Two columns: Campaigns + AI Insights */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Campañas activas</h2>
+            <Button variant="outline" size="sm" onClick={() => router.push('/campaigns')}>
+              Ver todas
+            </Button>
+          </div>
+          {campaigns.length === 0 ? (
+            <Card>
+              <CardHeader className="text-center py-8">
+                <CardDescription>No hay campañas activas</CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {campaigns.slice(0, 6).map(campaign => (
+                <CampaignCard
+                  key={campaign.id}
+                  campaign={campaign}
+                  onToggleStatus={(id, status) => handleToggleStatus(id, status)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+        <div>
+          <AiInsights campaignIds={activeCampaignIds} />
+        </div>
+      </div>
     </div>
   );
 }

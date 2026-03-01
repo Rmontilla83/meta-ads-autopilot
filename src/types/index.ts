@@ -134,3 +134,89 @@ export interface AIConversation {
   created_at: string;
   updated_at: string;
 }
+
+// Phase 3: Metrics & Analytics types
+
+export interface BreakdownEntry {
+  label: string;
+  value: number;
+  percentage: number;
+}
+
+export interface CampaignMetric {
+  id: string;
+  campaign_id: string;
+  user_id: string;
+  date: string;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  spend: number;
+  conversions: number;
+  leads: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  cpa: number;
+  frequency: number;
+  breakdown_age: BreakdownEntry[];
+  breakdown_gender: BreakdownEntry[];
+  breakdown_placement: BreakdownEntry[];
+  breakdown_device: BreakdownEntry[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyMetric {
+  date: string;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  spend: number;
+  conversions: number;
+  leads: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+}
+
+export interface DashboardKPIs {
+  spend: number;
+  spendChange: number;
+  reach: number;
+  reachChange: number;
+  clicks: number;
+  clicksChange: number;
+  conversions: number;
+  conversionsChange: number;
+  impressions: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+}
+
+export interface CampaignDetailMetrics {
+  campaign: Campaign;
+  kpis: {
+    impressions: number;
+    reach: number;
+    clicks: number;
+    spend: number;
+    conversions: number;
+    leads: number;
+    ctr: number;
+    cpc: number;
+    cpm: number;
+    cpa: number;
+    frequency: number;
+  };
+  timeSeries: DailyMetric[];
+  breakdowns: {
+    age: BreakdownEntry[];
+    gender: BreakdownEntry[];
+    placement: BreakdownEntry[];
+    device: BreakdownEntry[];
+  };
+  adSets: (CampaignAdSet & { metrics?: { impressions: number; clicks: number; spend: number; ctr: number } })[];
+  ads: (CampaignAd & { metrics?: { impressions: number; clicks: number; spend: number; ctr: number } })[];
+}

@@ -166,6 +166,50 @@ export class MetaAdsClient {
       level: 'account',
     });
   }
+
+  async getCampaignInsights(
+    campaignId: string,
+    dateRange: { since: string; until: string },
+    breakdowns?: string
+  ): Promise<{ data: Array<Record<string, unknown>> }> {
+    const params: Record<string, string> = {
+      fields: 'impressions,reach,clicks,spend,cpc,cpm,ctr,frequency,actions',
+      time_range: JSON.stringify(dateRange),
+      time_increment: '1',
+    };
+    if (breakdowns) {
+      params.breakdowns = breakdowns;
+    }
+    return this.request(`/${campaignId}/insights`, params);
+  }
+
+  async getAdSetInsights(
+    adSetId: string,
+    dateRange: { since: string; until: string }
+  ): Promise<{ data: Array<Record<string, unknown>> }> {
+    return this.request(`/${adSetId}/insights`, {
+      fields: 'impressions,reach,clicks,spend,cpc,cpm,ctr,actions',
+      time_range: JSON.stringify(dateRange),
+    });
+  }
+
+  async getAdInsights(
+    adId: string,
+    dateRange: { since: string; until: string }
+  ): Promise<{ data: Array<Record<string, unknown>> }> {
+    return this.request(`/${adId}/insights`, {
+      fields: 'impressions,reach,clicks,spend,cpc,cpm,ctr,actions',
+      time_range: JSON.stringify(dateRange),
+    });
+  }
+
+  async updateAdSetStatus(adSetId: string, status: string): Promise<{ success: boolean }> {
+    return this.post(`/${adSetId}`, { status });
+  }
+
+  async updateAdStatus(adId: string, status: string): Promise<{ success: boolean }> {
+    return this.post(`/${adId}`, { status });
+  }
 }
 
 export async function getMetaClientForUser(userId: string): Promise<MetaAdsClient> {
