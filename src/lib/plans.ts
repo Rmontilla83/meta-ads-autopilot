@@ -1,88 +1,138 @@
 import type { PlanLimits } from '@/types';
 
-export const PLANS: Record<string, { name: string; price: number; limits: PlanLimits; features: string[] }> = {
+export interface PlanConfig {
+  name: string;
+  price: { monthly: number; annual: number };
+  limits: PlanLimits;
+  features: string[];
+}
+
+export const PLANS: Record<string, PlanConfig> = {
   free: {
     name: 'Gratis',
-    price: 0,
+    price: { monthly: 0, annual: 0 },
     limits: {
-      campaigns: 2,
+      activeCampaigns: 1,
       monthlySpend: 500,
       adAccounts: 1,
-      aiSuggestions: 10,
-      automationRules: 2,
-      bulkCampaigns: 5,
+      aiGenerations: 5,
+      automationRules: 0,
+      bulkCampaigns: 0,
       support: 'comunidad',
+      autoOptimizer: false,
+      pdfReports: false,
+      bulkCreate: false,
+      advancedAnalytics: false,
     },
     features: [
-      '2 campañas activas',
-      'Hasta $500 USD en inversión',
+      '1 campaña activa',
+      '5 generaciones IA/mes',
       '1 cuenta publicitaria',
-      '10 sugerencias IA/mes',
+      'Dashboard básico',
       'Soporte comunidad',
     ],
   },
   starter: {
     name: 'Starter',
-    price: 29,
+    price: { monthly: 29, annual: Math.round(29 * 12 * 0.8 / 12) },
     limits: {
-      campaigns: 10,
+      activeCampaigns: 3,
       monthlySpend: 5000,
-      adAccounts: 3,
-      aiSuggestions: 100,
-      automationRules: 10,
-      bulkCampaigns: 20,
+      adAccounts: 2,
+      aiGenerations: 50,
+      automationRules: 5,
+      bulkCampaigns: 10,
       support: 'email',
+      autoOptimizer: false,
+      pdfReports: false,
+      bulkCreate: true,
+      advancedAnalytics: false,
     },
     features: [
-      '10 campañas activas',
-      'Hasta $5,000 USD en inversión',
-      '3 cuentas publicitarias',
-      '100 sugerencias IA/mes',
+      '3 campañas activas',
+      '50 generaciones IA/mes',
+      '2 cuentas publicitarias',
+      'Creación masiva',
+      '5 reglas de automatización',
       'Soporte por email',
     ],
   },
-  professional: {
-    name: 'Profesional',
-    price: 79,
+  growth: {
+    name: 'Growth',
+    price: { monthly: 79, annual: Math.round(79 * 12 * 0.8 / 12) },
     limits: {
-      campaigns: 50,
+      activeCampaigns: 15,
       monthlySpend: 50000,
-      adAccounts: 10,
-      aiSuggestions: -1, // unlimited
-      automationRules: 50,
-      bulkCampaigns: 100,
+      adAccounts: 5,
+      aiGenerations: -1,
+      automationRules: 25,
+      bulkCampaigns: 50,
       support: 'prioritario',
+      autoOptimizer: true,
+      pdfReports: true,
+      bulkCreate: true,
+      advancedAnalytics: true,
     },
     features: [
-      '50 campañas activas',
-      'Hasta $50,000 USD en inversión',
-      '10 cuentas publicitarias',
-      'Sugerencias IA ilimitadas',
+      '15 campañas activas',
+      'Generaciones IA ilimitadas',
+      '5 cuentas publicitarias',
+      'Reportes PDF con IA',
+      'Optimizador automático',
+      'Analíticas avanzadas',
       'Soporte prioritario',
     ],
   },
   agency: {
     name: 'Agencia',
-    price: 199,
+    price: { monthly: 199, annual: Math.round(199 * 12 * 0.8 / 12) },
     limits: {
-      campaigns: -1, // unlimited
+      activeCampaigns: -1,
       monthlySpend: -1,
       adAccounts: -1,
-      aiSuggestions: -1,
+      aiGenerations: -1,
       automationRules: -1,
       bulkCampaigns: -1,
       support: 'dedicado',
+      autoOptimizer: true,
+      pdfReports: true,
+      bulkCreate: true,
+      advancedAnalytics: true,
     },
     features: [
       'Campañas ilimitadas',
       'Sin límite de inversión',
       'Cuentas ilimitadas',
-      'Sugerencias IA ilimitadas',
+      'IA ilimitada',
+      'Reportes PDF con IA',
+      'Optimizador automático',
       'Soporte dedicado + onboarding',
     ],
   },
 };
 
+// Keep 'professional' as alias for 'growth' for backward compatibility
+PLANS.professional = PLANS.growth;
+
 export function getPlanLimits(plan: string): PlanLimits {
   return PLANS[plan]?.limits ?? PLANS.free.limits;
+}
+
+export const STRIPE_PRICE_MAP: Record<string, string | undefined> = {
+  'starter_monthly': process.env.STRIPE_PRICE_STARTER_MONTHLY,
+  'starter_annual': process.env.STRIPE_PRICE_STARTER_ANNUAL,
+  'growth_monthly': process.env.STRIPE_PRICE_GROWTH_MONTHLY,
+  'growth_annual': process.env.STRIPE_PRICE_GROWTH_ANNUAL,
+  'agency_monthly': process.env.STRIPE_PRICE_AGENCY_MONTHLY,
+  'agency_annual': process.env.STRIPE_PRICE_AGENCY_ANNUAL,
+};
+
+export function getPlanByStripePrice(priceId: string): { plan: string; interval: string } | null {
+  for (const [key, value] of Object.entries(STRIPE_PRICE_MAP)) {
+    if (value === priceId) {
+      const [plan, interval] = key.split('_');
+      return { plan, interval };
+    }
+  }
+  return null;
 }

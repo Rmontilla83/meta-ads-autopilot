@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getGeminiFlash, generateStructuredJSON } from '@/lib/gemini/client';
 import { AUDIENCE_EXPERT, buildAudiencePrompt } from '@/lib/gemini/prompts';
 import { audienceSuggestionsSchema } from '@/lib/gemini/validators';
+import { checkPlanLimit } from '@/lib/plan-limits';
+import { incrementUsage } from '@/lib/usage';
 
 export async function POST(request: Request) {
   try {
@@ -11,6 +13,15 @@ export async function POST(request: Request) {
 
     if (authError || !user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const limitCheck = await checkPlanLimit(user.id, 'ai_generations');
+    if (!limitCheck.allowed) {
+      return NextResponse.json({
+        error: `Has alcanzado el límite de ${limitCheck.limit} generaciones IA de tu plan`,
+        upgrade: true,
+        planRequired: limitCheck.planRequired,
+      }, { status: 403 });
     }
 
     const body = await request.json();
@@ -39,6 +50,8 @@ export async function POST(request: Request) {
       prompt,
       audienceSuggestionsSchema
     );
+
+    await incrementUsage(user.id, 'ai_generations');
 
     return NextResponse.json(result);
   } catch (error) {

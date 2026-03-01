@@ -4,7 +4,9 @@ import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil, FileText } from 'lucide-react';
+import { useUser } from '@/hooks/useUser';
+import { usePlan } from '@/hooks/usePlan';
 import type { Campaign } from '@/types';
 
 const STATUS_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
@@ -32,8 +34,11 @@ interface CampaignHeaderProps {
 
 export function CampaignHeader({ campaign, onToggleStatus, statusLoading }: CampaignHeaderProps) {
   const router = useRouter();
+  const { profile } = useUser();
+  const { canUseFeature } = usePlan(profile?.plan);
   const status = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.draft;
   const canToggle = campaign.status === 'active' || campaign.status === 'paused';
+  const showReport = canUseFeature('pdfReports');
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -75,6 +80,12 @@ export function CampaignHeader({ campaign, onToggleStatus, statusLoading }: Camp
               disabled={statusLoading}
             />
           </div>
+        )}
+        {showReport && (
+          <Button variant="outline" onClick={() => router.push(`/campaigns/${campaign.id}/report`)}>
+            <FileText className="h-4 w-4 mr-2" />
+            Reporte
+          </Button>
         )}
         <Button variant="outline" onClick={() => router.push(`/campaigns/${campaign.id}/edit`)}>
           <Pencil className="h-4 w-4 mr-2" />

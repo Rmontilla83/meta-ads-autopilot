@@ -77,36 +77,40 @@ const plans = [
     price: '$0',
     period: '/mes',
     description: 'Perfecto para empezar',
-    features: ['2 campañas activas', 'Hasta $500 en inversión', '1 cuenta publicitaria', '10 sugerencias IA/mes', 'Soporte comunidad'],
+    features: ['1 campaña activa', '5 generaciones IA/mes', '1 cuenta publicitaria', 'Dashboard básico', 'Soporte comunidad'],
     cta: 'Comenzar Gratis',
     popular: false,
+    href: '/register',
   },
   {
     name: 'Starter',
     price: '$29',
     period: '/mes',
     description: 'Para negocios en crecimiento',
-    features: ['10 campañas activas', 'Hasta $5,000 en inversión', '3 cuentas publicitarias', '100 sugerencias IA/mes', 'Soporte por email'],
+    features: ['3 campañas activas', '50 generaciones IA/mes', '2 cuentas publicitarias', 'Creación masiva', 'Soporte por email'],
     cta: 'Elegir Starter',
     popular: false,
+    href: '/pricing',
   },
   {
-    name: 'Profesional',
+    name: 'Growth',
     price: '$79',
     period: '/mes',
     description: 'Para equipos de marketing',
-    features: ['50 campañas activas', 'Hasta $50,000 en inversión', '10 cuentas publicitarias', 'Sugerencias IA ilimitadas', 'Soporte prioritario'],
-    cta: 'Elegir Profesional',
+    features: ['15 campañas activas', 'IA ilimitada', 'Reportes PDF con IA', 'Optimizador automático', 'Soporte prioritario'],
+    cta: 'Elegir Growth',
     popular: true,
+    href: '/pricing',
   },
   {
     name: 'Agencia',
     price: '$199',
     period: '/mes',
     description: 'Para agencias de publicidad',
-    features: ['Campañas ilimitadas', 'Sin límite de inversión', 'Cuentas ilimitadas', 'IA ilimitada + API', 'Soporte dedicado + onboarding'],
-    cta: 'Contactar Ventas',
+    features: ['Campañas ilimitadas', 'Sin límite de inversión', 'Cuentas ilimitadas', 'IA ilimitada', 'Soporte dedicado + onboarding'],
+    cta: 'Elegir Agencia',
     popular: false,
+    href: '/pricing',
   },
 ];
 
@@ -294,7 +298,7 @@ export default function LandingPage() {
                 </ul>
               </CardContent>
               <CardFooter>
-                <Link href="/register" className="w-full">
+                <Link href={plan.href} className="w-full">
                   <Button
                     className="w-full"
                     variant={plan.popular ? 'default' : 'outline'}

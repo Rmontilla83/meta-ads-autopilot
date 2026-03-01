@@ -3,7 +3,8 @@ export interface Profile {
   email: string;
   full_name: string | null;
   avatar_url: string | null;
-  plan: 'free' | 'starter' | 'professional' | 'agency';
+  plan: 'free' | 'starter' | 'professional' | 'growth' | 'agency';
+  stripe_customer_id?: string;
   onboarding_completed: boolean;
   onboarding_step: number;
   created_at: string;
@@ -69,13 +70,44 @@ export interface MetaPixel {
 }
 
 export interface PlanLimits {
-  campaigns: number;
+  activeCampaigns: number;
   monthlySpend: number;
   adAccounts: number;
-  aiSuggestions: number;
+  aiGenerations: number;
   automationRules: number;
   bulkCampaigns: number;
   support: string;
+  autoOptimizer: boolean;
+  pdfReports: boolean;
+  bulkCreate: boolean;
+  advancedAnalytics: boolean;
+}
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  stripe_customer_id: string;
+  stripe_subscription_id: string | null;
+  stripe_price_id: string | null;
+  plan: string;
+  status: 'active' | 'canceled' | 'past_due' | 'incomplete' | 'trialing' | 'unpaid';
+  billing_interval: 'monthly' | 'annual' | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UsageTracking {
+  id: string;
+  user_id: string;
+  month: string;
+  ai_generations: number;
+  campaigns_created: number;
+  reports_generated: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface NavItem {

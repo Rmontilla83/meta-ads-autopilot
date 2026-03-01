@@ -109,6 +109,20 @@ export const optimizationSuggestionsSchema = z.object({
   })).min(1),
 });
 
+export const reportAnalysisSchema = z.object({
+  executive_summary: z.string(),
+  strengths: z.array(z.string()).min(1),
+  weaknesses: z.array(z.string()).min(1),
+  recommendations: z.array(z.object({
+    action: z.string(),
+    priority: z.enum(['high', 'medium', 'low']).default('medium'),
+    expected_impact: z.string(),
+  })).min(1),
+  overall_rating: z.enum(['Excelente', 'Bueno', 'Regular', 'Bajo']).default('Regular'),
+  conclusion: z.string(),
+});
+
+export type ReportAnalysisOutput = z.infer<typeof reportAnalysisSchema>;
 export type CampaignStrategyOutput = z.infer<typeof campaignStrategySchema>;
 export type CopyVariationsOutput = z.infer<typeof copyVariationsSchema>;
 export type AudienceSuggestionsOutput = z.infer<typeof audienceSuggestionsSchema>;

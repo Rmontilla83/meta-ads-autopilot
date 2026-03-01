@@ -120,7 +120,7 @@ export default function CampaignsPage() {
         <div>
           <h1 className="text-3xl font-bold">Campañas</h1>
           <p className="text-muted-foreground mt-1">
-            {campaigns.length} de {planLimits.campaigns === Infinity ? '∞' : planLimits.campaigns} campañas
+            {campaigns.length} de {planLimits.activeCampaigns === -1 ? '∞' : planLimits.activeCampaigns} campañas
           </p>
         </div>
         <div className="flex gap-2">

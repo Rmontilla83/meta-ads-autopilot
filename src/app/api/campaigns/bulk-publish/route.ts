@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getMetaClientForUser } from '@/lib/meta/client';
 import { CampaignPublisher } from '@/lib/meta/publisher';
 import { createNotification } from '@/lib/notifications';
+import { checkPlanLimit } from '@/lib/plan-limits';
 import type { GeneratedCampaign } from '@/lib/gemini/types';
 
 export async function POST(request: Request) {
@@ -14,6 +15,16 @@ export async function POST(request: Request) {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+
+    // Check bulk create feature
+    const limitCheck = await checkPlanLimit(user.id, 'bulk_create');
+    if (!limitCheck.allowed) {
+      return new Response(JSON.stringify({
+        error: 'La creación masiva requiere un plan Starter o superior',
+        upgrade: true,
+        planRequired: limitCheck.planRequired,
+      }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
 
     const { campaigns } = await request.json();

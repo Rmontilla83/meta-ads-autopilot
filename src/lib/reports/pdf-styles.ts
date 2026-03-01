@@ -1,0 +1,208 @@
+import { StyleSheet } from '@react-pdf/renderer';
+
+export const styles = StyleSheet.create({
+  page: {
+    padding: 40,
+    fontFamily: 'Helvetica',
+    fontSize: 10,
+    color: '#1a1a1a',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 15,
+    borderBottom: '2px solid #2563eb',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: 'Helvetica-Bold',
+    color: '#2563eb',
+  },
+  headerDate: {
+    fontSize: 9,
+    color: '#666',
+  },
+  campaignName: {
+    fontSize: 16,
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 10,
+    color: '#666',
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontFamily: 'Helvetica-Bold',
+    marginTop: 20,
+    marginBottom: 10,
+    color: '#1a1a1a',
+    borderBottom: '1px solid #e5e5e5',
+    paddingBottom: 5,
+  },
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 15,
+  },
+  kpiCard: {
+    width: '18%',
+    padding: 10,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  kpiValue: {
+    fontSize: 14,
+    fontFamily: 'Helvetica-Bold',
+    color: '#2563eb',
+  },
+  kpiLabel: {
+    fontSize: 7,
+    color: '#666',
+    marginTop: 3,
+    textAlign: 'center',
+  },
+  table: {
+    marginBottom: 15,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderBottom: '1px solid #e2e8f0',
+    padding: 6,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottom: '1px solid #f1f5f9',
+    padding: 5,
+  },
+  tableCell: {
+    fontSize: 8,
+    flex: 1,
+    textAlign: 'right',
+  },
+  tableCellFirst: {
+    fontSize: 8,
+    flex: 1.5,
+    textAlign: 'left',
+  },
+  tableHeaderCell: {
+    fontSize: 8,
+    fontFamily: 'Helvetica-Bold',
+    flex: 1,
+    textAlign: 'right',
+    color: '#475569',
+  },
+  tableHeaderCellFirst: {
+    fontSize: 8,
+    fontFamily: 'Helvetica-Bold',
+    flex: 1.5,
+    textAlign: 'left',
+    color: '#475569',
+  },
+  breakdownContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 15,
+  },
+  breakdownCard: {
+    width: '48%',
+    padding: 10,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 6,
+  },
+  breakdownTitle: {
+    fontSize: 10,
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 8,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  breakdownLabel: {
+    fontSize: 8,
+  },
+  breakdownValue: {
+    fontSize: 8,
+    color: '#666',
+  },
+  barContainer: {
+    marginTop: 2,
+    height: 4,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 2,
+    marginBottom: 4,
+  },
+  aiSection: {
+    marginTop: 15,
+    padding: 15,
+    backgroundColor: '#f0f4ff',
+    borderRadius: 8,
+  },
+  aiRating: {
+    fontSize: 11,
+    fontFamily: 'Helvetica-Bold',
+    color: '#2563eb',
+    marginBottom: 10,
+  },
+  aiText: {
+    fontSize: 9,
+    lineHeight: 1.5,
+    color: '#333',
+    marginBottom: 10,
+  },
+  strengthItem: {
+    fontSize: 8,
+    color: '#16a34a',
+    marginBottom: 3,
+  },
+  weaknessItem: {
+    fontSize: 8,
+    color: '#dc2626',
+    marginBottom: 3,
+  },
+  recCard: {
+    padding: 8,
+    backgroundColor: '#fff',
+    borderRadius: 4,
+    marginBottom: 5,
+  },
+  recAction: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+  },
+  recImpact: {
+    fontSize: 8,
+    color: '#666',
+    marginTop: 2,
+  },
+  recPriority: {
+    fontSize: 7,
+    color: '#2563eb',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 40,
+    right: 40,
+    textAlign: 'center',
+    fontSize: 8,
+    color: '#999',
+    borderTop: '1px solid #e5e5e5',
+    paddingTop: 10,
+  },
+  chartContainer: {
+    marginBottom: 15,
+    padding: 10,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 6,
+  },
+});

@@ -40,7 +40,9 @@ export function Navbar() {
         .slice(0, 2)
     : user?.email?.[0]?.toUpperCase() || '?';
 
-  const planInfo = PLANS[profile?.plan ?? 'free'];
+  const rawPlan = profile?.plan ?? 'free';
+  const planKey = rawPlan === 'professional' ? 'growth' : rawPlan;
+  const planInfo = PLANS[planKey];
 
   return (
     <header className="h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">

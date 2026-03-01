@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getPlanLimits } from '@/lib/plans';
+import { checkPlanLimit } from '@/lib/plan-limits';
 
 export async function GET() {
   try {
@@ -37,26 +37,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    // Check plan limits
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('plan')
-      .eq('id', user.id)
-      .single();
-
-    const limits = getPlanLimits(profile?.plan ?? 'free');
-
-    if (limits.automationRules !== -1) {
-      const { count } = await supabase
-        .from('automation_rules')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      if ((count ?? 0) >= limits.automationRules) {
-        return NextResponse.json({
-          error: `Has alcanzado el límite de ${limits.automationRules} reglas de tu plan`,
-        }, { status: 403 });
-      }
+    // Check auto_optimizer feature access
+    const limitCheck = await checkPlanLimit(user.id, 'auto_optimizer');
+    if (!limitCheck.allowed) {
+      return NextResponse.json({
+        error: 'La automatización requiere un plan Growth o superior',
+        upgrade: true,
+        planRequired: limitCheck.planRequired,
+      }, { status: 403 });
     }
 
     const body = await request.json();

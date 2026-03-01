@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getMetaClientForUser } from '@/lib/meta/client';
 import { CampaignPublisher, type PublishProgress } from '@/lib/meta/publisher';
 import { createNotification } from '@/lib/notifications';
+import { checkPlanLimit } from '@/lib/plan-limits';
 import type { GeneratedCampaign } from '@/lib/gemini/types';
 
 export async function POST(request: Request) {
@@ -12,6 +13,16 @@ export async function POST(request: Request) {
 
     if (authError || !user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    // Check active campaign limit
+    const limitCheck = await checkPlanLimit(user.id, 'active_campaigns');
+    if (!limitCheck.allowed) {
+      return NextResponse.json({
+        error: `Has alcanzado el límite de ${limitCheck.limit} campañas activas de tu plan`,
+        upgrade: true,
+        planRequired: limitCheck.planRequired,
+      }, { status: 403 });
     }
 
     const { campaign_id } = await request.json();

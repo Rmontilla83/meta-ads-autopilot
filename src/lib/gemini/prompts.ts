@@ -169,6 +169,65 @@ ${context.product_or_service ? `PRODUCTO/SERVICIO: ${context.product_or_service}
 Genera variaciones de copy para los anuncios.`;
 }
 
+export const REPORT_ANALYST = `Eres un analista senior de marketing digital especializado en Meta Ads para Latinoamérica.
+
+Tu rol es crear un resumen ejecutivo de rendimiento de campaña en español.
+
+REGLAS:
+1. SIEMPRE responde en español.
+2. El resumen ejecutivo debe ser conciso pero completo (2-3 párrafos).
+3. Las fortalezas y debilidades deben ser específicas basadas en los datos.
+4. Las recomendaciones deben ser accionables y priorizadas.
+5. La conclusión debe incluir una calificación general (Excelente/Bueno/Regular/Bajo).
+6. Considera benchmarks de la industria para LATAM.
+
+FORMATO DE RESPUESTA (JSON):
+{
+  "executive_summary": "Resumen ejecutivo de 2-3 párrafos",
+  "strengths": ["Fortaleza 1", "Fortaleza 2"],
+  "weaknesses": ["Debilidad 1", "Debilidad 2"],
+  "recommendations": [
+    {
+      "action": "Acción recomendada",
+      "priority": "high",
+      "expected_impact": "Impacto esperado"
+    }
+  ],
+  "overall_rating": "Bueno",
+  "conclusion": "Conclusión breve del rendimiento general"
+}`;
+
+export function buildReportAnalysisPrompt(context: {
+  campaign_name: string;
+  objective: string;
+  days: number;
+  kpis: Record<string, number>;
+  breakdowns: Record<string, Array<{ label: string; percentage: number }>>;
+}): string {
+  return `CAMPAÑA: ${context.campaign_name}
+OBJETIVO: ${context.objective}
+PERÍODO: Últimos ${context.days} días
+
+KPIs:
+- Impresiones: ${context.kpis.impressions?.toLocaleString() || 0}
+- Alcance: ${context.kpis.reach?.toLocaleString() || 0}
+- Clics: ${context.kpis.clicks?.toLocaleString() || 0}
+- Gasto: $${context.kpis.spend || 0}
+- Conversiones: ${context.kpis.conversions || 0}
+- CTR: ${context.kpis.ctr || 0}%
+- CPC: $${context.kpis.cpc || 0}
+- CPM: $${context.kpis.cpm || 0}
+- CPA: $${context.kpis.cpa || 0}
+- Frecuencia: ${context.kpis.frequency || 0}
+
+AUDIENCIA POR EDAD: ${JSON.stringify(context.breakdowns.age?.slice(0, 5))}
+AUDIENCIA POR GÉNERO: ${JSON.stringify(context.breakdowns.gender)}
+UBICACIONES: ${JSON.stringify(context.breakdowns.placement?.slice(0, 5))}
+DISPOSITIVOS: ${JSON.stringify(context.breakdowns.device?.slice(0, 5))}
+
+Genera un análisis ejecutivo completo de esta campaña.`;
+}
+
 export function buildAudiencePrompt(context: {
   business_name: string;
   industry: string | null;

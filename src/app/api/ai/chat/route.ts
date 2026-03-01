@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getGeminiFlash, streamChat } from '@/lib/gemini/client';
-import { CAMPAIGN_STRATEGIST } from '@/lib/gemini/prompts';
+import { checkPlanLimit } from '@/lib/plan-limits';
+import { incrementUsage } from '@/lib/usage';
 import type { ChatMessage } from '@/lib/gemini/types';
 import type { BusinessProfile } from '@/types';
 import type { GeneratedCampaign } from '@/lib/gemini/types';
@@ -16,6 +17,18 @@ export async function POST(request: Request) {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+
+    // Check AI generation limit
+    const limitCheck = await checkPlanLimit(user.id, 'ai_generations');
+    if (!limitCheck.allowed) {
+      return new Response(JSON.stringify({
+        error: `Has alcanzado el límite de ${limitCheck.limit} generaciones IA de tu plan`,
+        upgrade: true,
+        planRequired: limitCheck.planRequired,
+      }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    await incrementUsage(user.id, 'ai_generations');
 
     const body = await request.json();
     const { messages, campaign_context, business_profile } = body as {
