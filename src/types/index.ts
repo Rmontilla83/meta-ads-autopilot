@@ -11,6 +11,42 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface BuyerPersona {
+  id: string;
+  name: string;
+  description: string;
+  demographics: string;
+  pain_points: string[];
+  motivations: string[];
+  objections: string[];
+}
+
+export interface SalesAngle {
+  id: string;
+  name: string;
+  hook: string;
+  value_proposition: string;
+  target_persona_id?: string;
+  emotional_trigger: string;
+}
+
+export interface BrandColors {
+  primary: string;
+  secondary: string;
+  accent: string;
+}
+
+export interface BrandAnalysis {
+  visual_style: string;
+  personality: string[];
+  tone_description: string;
+  color_palette: { hex: string; name: string; usage: string }[];
+  dos: string[];
+  donts: string[];
+  recommended_ad_styles: string[];
+  summary: string;
+}
+
 export interface BusinessProfile {
   id: string;
   user_id: string;
@@ -24,6 +60,14 @@ export interface BusinessProfile {
   monthly_budget: string | null;
   experience_level: string | null;
   brand_tone: string | null;
+  logo_url: string | null;
+  brand_files: string[];
+  brand_colors: BrandColors | null;
+  brand_typography: string | null;
+  brand_gallery: string[];
+  brand_analysis: BrandAnalysis | null;
+  buyer_personas: BuyerPersona[];
+  sales_angles: SalesAngle[];
   created_at: string;
   updated_at: string;
 }
@@ -74,6 +118,7 @@ export interface PlanLimits {
   monthlySpend: number;
   adAccounts: number;
   aiGenerations: number;
+  imageGenerations: number;
   automationRules: number;
   bulkCampaigns: number;
   support: string;
@@ -81,6 +126,10 @@ export interface PlanLimits {
   pdfReports: boolean;
   bulkCreate: boolean;
   advancedAnalytics: boolean;
+  abTesting: boolean;
+  funnels: boolean;
+  retargeting: boolean;
+  smartScheduling: boolean;
 }
 
 export interface Subscription {
@@ -104,6 +153,7 @@ export interface UsageTracking {
   user_id: string;
   month: string;
   ai_generations: number;
+  image_generations: number;
   campaigns_created: number;
   reports_generated: number;
   created_at: string;
@@ -295,7 +345,7 @@ export interface RuleExecution {
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'rule_executed' | 'campaign_published' | 'campaign_error' | 'budget_alert' | 'performance_alert' | 'system';
+  type: 'rule_executed' | 'campaign_published' | 'campaign_error' | 'budget_alert' | 'performance_alert' | 'system' | 'ab_test_winner' | 'creative_fatigue' | 'scaling_alert' | 'funnel_published';
   title: string;
   message: string;
   metadata: Record<string, unknown>;
@@ -316,4 +366,168 @@ export interface CampaignTemplate {
   usage_count: number;
   created_at: string;
   updated_at: string;
+}
+
+// Advanced Optimization types
+
+export interface ABTest {
+  id: string;
+  user_id: string;
+  campaign_id: string | null;
+  name: string;
+  test_type: 'copy' | 'creative' | 'audience' | 'multivariate' | 'hook';
+  status: 'draft' | 'running' | 'completed' | 'paused';
+  meta_campaign_id: string | null;
+  variants: ABTestVariant[];
+  winner_variant_id: string | null;
+  success_metric: string;
+  test_duration_days: number;
+  min_conversions_per_variant: number;
+  auto_winner_enabled: boolean;
+  hypothesis?: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Campaign data joined via Supabase select('*, campaigns(...)') on ab_tests */
+export interface ABTestCampaignJoin {
+  name: string;
+  objective: string | null;
+  status: string;
+  meta_campaign_id: string | null;
+  campaign_data: Record<string, unknown>;
+}
+
+/** ABTest row from Supabase with joined campaign relation */
+export type ABTestWithCampaign = ABTest & {
+  campaigns?: ABTestCampaignJoin | null;
+}
+
+export interface ABTestVariant {
+  id: string;
+  name: string;
+  type: string;
+  config: {
+    copy?: { primary_text: string; headline: string; description: string };
+    targeting?: Record<string, unknown>;
+    image_prompt?: string;
+    hook?: string;
+  };
+  meta_adset_id?: string;
+  meta_ad_id?: string;
+  meta_creative_id?: string;
+  metrics?: {
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    spend: number;
+    ctr: number;
+    cpa: number;
+  };
+}
+
+export interface CreativeRotation {
+  id: string;
+  user_id: string;
+  campaign_id: string | null;
+  ad_id: string | null;
+  meta_ad_id: string | null;
+  status: 'healthy' | 'warning' | 'fatigued' | 'rotated';
+  frequency_at_detection: number;
+  ctr_at_detection: number;
+  ctr_baseline: number;
+  ctr_drop_percentage: number;
+  impressions_at_detection: number;
+  replacement_ad_id: string | null;
+  detected_at: string;
+  rotated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FunnelCampaign {
+  id: string;
+  user_id: string;
+  name: string;
+  goal: string;
+  status: 'draft' | 'publishing' | 'active' | 'paused' | 'error';
+  tofu_campaign_id: string | null;
+  mofu_campaign_id: string | null;
+  bofu_campaign_id: string | null;
+  funnel_config: {
+    tofu?: Record<string, unknown>;
+    mofu?: Record<string, unknown>;
+    bofu?: Record<string, unknown>;
+  };
+  custom_audience_ids: string[];
+  daily_budget: number;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomAudience {
+  id: string;
+  user_id: string;
+  meta_audience_id: string | null;
+  name: string;
+  audience_type: 'custom' | 'lookalike' | 'retargeting';
+  subtype: string | null;
+  source_audience_id: string | null;
+  lookalike_spec: Record<string, unknown> | null;
+  approximate_count: number;
+  status: 'pending' | 'ready' | 'error' | 'deleted';
+  campaign_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScalingEvent {
+  id: string;
+  user_id: string;
+  campaign_id: string | null;
+  meta_adset_id: string | null;
+  scaling_type: 'vertical' | 'horizontal' | 'lookalike' | 'revert';
+  action_detail: Record<string, unknown>;
+  success: boolean;
+  error_message: string | null;
+  reverted: boolean;
+  reverted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleConfig {
+  id: string;
+  user_id: string;
+  campaign_id: string | null;
+  meta_adset_id: string | null;
+  schedule_matrix: boolean[][];
+  performance_heatmap: number[][];
+  is_applied: boolean;
+  applied_at: string | null;
+  last_evaluated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Trafficker IA types
+
+export interface RecommendationAction {
+  id: string;
+  user_id: string;
+  campaign_id: string | null;
+  recommendation_title: string;
+  action_type: string;
+  action_params: Record<string, unknown>;
+  target_id: string | null;
+  target_name: string | null;
+  result: 'success' | 'failed' | 'pending';
+  error_message: string | null;
+  metrics_before: Record<string, unknown> | null;
+  metrics_after: Record<string, unknown> | null;
+  applied_at: string;
 }

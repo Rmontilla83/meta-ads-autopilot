@@ -1,20 +1,20 @@
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
 import { getMetaClientForUser } from '@/lib/meta/client';
 import { CampaignPublisher } from '@/lib/meta/publisher';
 import { createNotification } from '@/lib/notifications';
 import { checkPlanLimit } from '@/lib/plan-limits';
+import { rateLimit } from '@/lib/rate-limit';
+import { handleApiError, rateLimitResponse } from '@/lib/api-errors';
+import { logger } from '@/lib/logger';
 import type { GeneratedCampaign } from '@/lib/gemini/types';
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'No autorizado' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    const { success, resetAt } = await rateLimit(`bulk-publish:${user.id}`, { maxRequests: 5, windowMs: 60_000 });
+    if (!success) {
+      return rateLimitResponse(resetAt);
     }
 
     // Check bulk create feature
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     // Get Meta connection
     const { data: metaConnection } = await supabase
       .from('meta_connections')
-      .select('ad_account_id, page_id')
+      .select('ad_account_id, page_id, pixel_id')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .single();
@@ -99,7 +99,8 @@ export async function POST(request: Request) {
               campaignData,
               metaConnection.ad_account_id,
               metaConnection.page_id,
-              () => {} // Silent progress
+              () => {}, // Silent progress
+              metaConnection.pixel_id
             );
 
             const result = await publisher.publish();
@@ -179,10 +180,6 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error('Bulk publish error:', error);
-    return new Response(JSON.stringify({ error: 'Error interno' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return handleApiError(error, { route: 'campaigns/bulk-publish' });
   }
 }

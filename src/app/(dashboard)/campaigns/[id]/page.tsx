@@ -1,20 +1,35 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
-import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, FlaskConical, Clock, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import dynamic from 'next/dynamic';
 import { CampaignHeader } from '@/components/campaigns/detail/campaign-header';
 import { CampaignKpis } from '@/components/campaigns/detail/campaign-kpis';
-import { TabOverview } from '@/components/campaigns/detail/tab-overview';
-import { TabAudience } from '@/components/campaigns/detail/tab-audience';
-import { TabPlacements } from '@/components/campaigns/detail/tab-placements';
-import { TabDevices } from '@/components/campaigns/detail/tab-devices';
 import { AdSetsTable } from '@/components/campaigns/detail/adsets-table';
 import { AdsGallery } from '@/components/campaigns/detail/ads-gallery';
-import { AiAnalysis } from '@/components/campaigns/detail/ai-analysis';
 import { ActivityLog } from '@/components/campaigns/detail/activity-log';
 import type { CampaignDetailMetrics } from '@/types';
+
+const TabOverview = dynamic(() => import('@/components/campaigns/detail/tab-overview').then(m => m.TabOverview), {
+  loading: () => <div className="h-64 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
+const TabAudience = dynamic(() => import('@/components/campaigns/detail/tab-audience').then(m => m.TabAudience), {
+  loading: () => <div className="h-64 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
+const TabPlacements = dynamic(() => import('@/components/campaigns/detail/tab-placements').then(m => m.TabPlacements), {
+  loading: () => <div className="h-64 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
+const TabDevices = dynamic(() => import('@/components/campaigns/detail/tab-devices').then(m => m.TabDevices), {
+  loading: () => <div className="h-64 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
+const AiAnalysis = dynamic(() => import('@/components/campaigns/detail/ai-analysis').then(m => m.AiAnalysis), {
+  loading: () => <div className="h-40 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
 
 export default function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -22,6 +37,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [fatiguedCount, setFatiguedCount] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -40,6 +56,15 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
       }
     };
     fetchData();
+
+    // Check creative fatigue
+    fetch('/api/creative-fatigue')
+      .then(r => r.ok ? r.json() : { results: [] })
+      .then(d => {
+        const fatigued = d.results?.filter((r: { status: string }) => r.status === 'fatigued')?.length ?? 0;
+        setFatiguedCount(fatigued);
+      })
+      .catch(() => { toast.error('Error al verificar fatiga creativa'); });
   }, [id]);
 
   const handleToggleCampaignStatus = async (active: boolean) => {
@@ -60,7 +85,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
         setData(prev => prev ? { ...prev, campaign: { ...prev.campaign, status } } : prev);
       }
     } catch {
-      // ignore
+      toast.error('Error al cambiar el estado de la campaña');
     }
     setStatusLoading(false);
   };
@@ -89,7 +114,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
         });
       }
     } catch {
-      // ignore
+      toast.error('Error al cambiar el estado del ad set');
     }
   };
 
@@ -119,6 +144,42 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
         onToggleStatus={handleToggleCampaignStatus}
         statusLoading={statusLoading}
       />
+
+      {/* Feature Action Buttons */}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" asChild>
+          <Link href={`/campaigns/${id}/ab-test`}>
+            <FlaskConical className="h-4 w-4 mr-2" />
+            A/B Test
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link href={`/campaigns/${id}/scheduling`}>
+            <Clock className="h-4 w-4 mr-2" />
+            Horario
+          </Link>
+        </Button>
+      </div>
+
+      {/* Creative Fatigue Banner */}
+      {fatiguedCount > 0 && (
+        <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20">
+          <CardContent className="py-3 flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                {fatiguedCount} anuncio{fatiguedCount > 1 ? 's' : ''} con fatiga creativa detectada
+              </p>
+              <p className="text-xs text-red-600/70 dark:text-red-400/70">
+                Los anuncios fatigados tienen CTR en declive y frecuencia alta. Considera rotar los creativos.
+              </p>
+            </div>
+            <Button variant="destructive" size="sm" asChild>
+              <Link href={`/campaigns/${id}/ab-test`}>Rotar creativos</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPIs */}
       <CampaignKpis kpis={data.kpis} />

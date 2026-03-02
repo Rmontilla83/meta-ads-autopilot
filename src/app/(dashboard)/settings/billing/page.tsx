@@ -21,12 +21,14 @@ interface SubscriptionInfo {
   } | null;
   usage: {
     ai_generations: number;
+    image_generations: number;
     active_campaigns: number;
     reports_generated: number;
   };
   limits: {
     activeCampaigns: number;
     aiGenerations: number;
+    imageGenerations: number;
     pdfReports: boolean;
   };
 }
@@ -37,6 +39,14 @@ export default function BillingPage() {
   const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
+    // Show success toast if redirected from Stripe checkout
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success') === 'true') {
+      toast.success('Pago procesado exitosamente. Tu plan se actualizará en unos momentos.');
+      // Clean URL
+      window.history.replaceState({}, '', '/settings/billing');
+    }
+
     fetch('/api/subscription')
       .then(r => r.json())
       .then(data => setInfo(data))
@@ -166,6 +176,20 @@ export default function BillingPage() {
             </div>
             {info.limits.aiGenerations !== -1 && (
               <Progress value={usagePercent(info.usage.ai_generations, info.limits.aiGenerations)} />
+            )}
+          </div>
+
+          {/* Image Generations */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Imágenes generadas</span>
+              <span className="text-muted-foreground">
+                {info.usage.image_generations}
+                {info.limits.imageGenerations === -1 ? ' / Ilimitadas' : ` / ${info.limits.imageGenerations}`}
+              </span>
+            </div>
+            {info.limits.imageGenerations !== -1 && (
+              <Progress value={usagePercent(info.usage.image_generations, info.limits.imageGenerations)} />
             )}
           </div>
 

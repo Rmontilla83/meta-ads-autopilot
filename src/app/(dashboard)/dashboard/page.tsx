@@ -6,12 +6,20 @@ import { useUser } from '@/hooks/useUser';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Link2, Plus, Loader2, DollarSign, Users, MousePointer, Target } from 'lucide-react';
+import { Link2, Plus, Loader2, DollarSign, Users, MousePointer, Target, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import dynamic from 'next/dynamic';
 import { KpiCard } from '@/components/dashboard/kpi-card';
-import { MetricsChart } from '@/components/dashboard/metrics-chart';
 import { CampaignCard } from '@/components/dashboard/campaign-card';
-import { AiInsights } from '@/components/dashboard/ai-insights';
 import type { Campaign, DashboardKPIs, DailyMetric } from '@/types';
+import { CampaignExpressCard } from '@/components/campaigns/express/campaign-express-card';
+
+const MetricsChart = dynamic(() => import('@/components/dashboard/metrics-chart').then(m => m.MetricsChart), {
+  loading: () => <div className="h-80 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
+const AiInsights = dynamic(() => import('@/components/dashboard/ai-insights').then(m => m.AiInsights), {
+  loading: () => <div className="h-40 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -21,6 +29,7 @@ export default function DashboardPage() {
   const [timeSeries, setTimeSeries] = useState<DailyMetric[]>([]);
   const [dateRange, setDateRange] = useState('7d');
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchData = useCallback(async (range: string) => {
     setLoading(true);
@@ -32,7 +41,7 @@ export default function DashboardPage() {
         setTimeSeries(data.timeSeries);
       }
     } catch {
-      // Silently fail — will show empty state
+      toast.error('Error al cargar las métricas del dashboard');
     }
     setLoading(false);
   }, []);
@@ -64,6 +73,34 @@ export default function DashboardPage() {
     fetchData(range);
   };
 
+  const handleSyncMetrics = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/analytics/sync', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Error al sincronizar');
+      } else {
+        toast.success(`Sincronización completa: ${data.synced} registros de ${data.campaigns} campaña(s)`);
+        // Reload dashboard data
+        fetchData(dateRange);
+        // Reload campaigns list
+        const supabase = createClient();
+        const { data: freshCampaigns } = await supabase
+          .from('campaigns')
+          .select('*')
+          .in('status', ['active', 'paused', 'publishing'])
+          .order('updated_at', { ascending: false })
+          .limit(10);
+        if (freshCampaigns) setCampaigns(freshCampaigns);
+      }
+    } catch {
+      toast.error('Error de conexión al sincronizar');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleToggleStatus = async (campaignId: string, newStatus: string) => {
     try {
       const res = await fetch('/api/campaigns/status', {
@@ -78,7 +115,7 @@ export default function DashboardPage() {
         ));
       }
     } catch {
-      // ignore
+      toast.error('Error al cambiar el estado de la campaña');
     }
   };
 
@@ -159,14 +196,32 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">
-          ¡Hola, {profile?.full_name?.split(' ')[0] || 'Usuario'}!
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Aquí tienes un resumen de tus campañas de Meta Ads.
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">
+            ¡Hola, {profile?.full_name?.split(' ')[0] || 'Usuario'}!
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Aquí tienes un resumen de tus campañas de Meta Ads.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSyncMetrics}
+          disabled={syncing}
+        >
+          {syncing ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-2" />
+          )}
+          {syncing ? 'Sincronizando...' : 'Sincronizar métricas'}
+        </Button>
       </div>
+
+      {/* Campaign Express */}
+      <CampaignExpressCard />
 
       {/* KPI Cards */}
       {loading ? (

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useUser } from '@/hooks/useUser';
@@ -16,14 +17,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LogOut, Settings, User } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { LogOut, Settings, User, Menu, Zap } from 'lucide-react';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { PLANS } from '@/lib/plans';
+import { SidebarContent } from './sidebar';
 
 export function Navbar() {
   const { user, profile, businessProfile, metaConnection, loading } = useUser();
   const router = useRouter();
   const supabase = createClient();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -47,8 +55,25 @@ export function Navbar() {
   return (
     <header className="h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
       <div className="flex items-center justify-between h-full px-4 md:px-6">
-        {/* Left: Business name */}
+        {/* Left: Mobile hamburger + Business name */}
         <div className="flex items-center gap-3">
+          {/* Mobile sidebar trigger */}
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Abrir menú</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 p-0">
+              <div className="flex items-center gap-2 px-4 h-16 border-b">
+                <Zap className="h-7 w-7 text-primary shrink-0" />
+                <span className="font-bold text-lg">MetaAds Autopilot</span>
+              </div>
+              <SidebarContent onNavigate={() => setMobileOpen(false)} />
+            </SheetContent>
+          </Sheet>
+
           <h2 className="text-lg font-semibold truncate max-w-[200px]">
             {businessProfile?.business_name || 'Mi Negocio'}
           </h2>
@@ -84,7 +109,7 @@ export function Navbar() {
                 <User className="mr-2 h-4 w-4" />
                 Perfil
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push('/settings/meta-connection')}>
+              <DropdownMenuItem onClick={() => router.push('/settings/billing')}>
                 <Settings className="mr-2 h-4 w-4" />
                 Configuración
               </DropdownMenuItem>

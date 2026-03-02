@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
+import { handleApiError, rateLimitResponse } from '@/lib/api-errors';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function GET(
   _request: Request,
@@ -7,12 +9,10 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const { success, resetAt } = await rateLimit(`template-get:${user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    if (!success) return rateLimitResponse(resetAt);
 
     const { data: template, error } = await supabase
       .from('campaign_templates')
@@ -33,8 +33,7 @@ export async function GET(
 
     return NextResponse.json({ template });
   } catch (error) {
-    console.error('Template GET error:', error);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return handleApiError(error, { route: 'campaign-templates-[id]-GET' });
   }
 }
 
@@ -44,12 +43,10 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const { success, resetAt } = await rateLimit(`template-put:${user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    if (!success) return rateLimitResponse(resetAt);
 
     const body = await request.json();
 
@@ -73,8 +70,7 @@ export async function PUT(
 
     return NextResponse.json({ template });
   } catch (error) {
-    console.error('Template PUT error:', error);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return handleApiError(error, { route: 'campaign-templates-[id]-PUT' });
   }
 }
 
@@ -84,12 +80,10 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const { success, resetAt } = await rateLimit(`template-del:${user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    if (!success) return rateLimitResponse(resetAt);
 
     const { error } = await supabase
       .from('campaign_templates')
@@ -103,7 +97,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Template DELETE error:', error);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return handleApiError(error, { route: 'campaign-templates-[id]-DELETE' });
   }
 }

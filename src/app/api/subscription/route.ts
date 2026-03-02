@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
+import { handleApiError, rateLimitResponse } from '@/lib/api-errors';
+import { rateLimit } from '@/lib/rate-limit';
 import { getUsage } from '@/lib/usage';
 import { getPlanLimits, PLANS } from '@/lib/plans';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const { success, resetAt } = await rateLimit(`subscription:${user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    if (!success) return rateLimitResponse(resetAt);
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -49,13 +49,15 @@ export async function GET() {
       subscription: subscription || null,
       usage: {
         ai_generations: usage.ai_generations,
+        image_generations: usage.image_generations,
         campaigns_created: usage.campaigns_created,
         reports_generated: usage.reports_generated,
         active_campaigns: activeCampaigns ?? 0,
       },
+    }, {
+      headers: { 'Cache-Control': 'private, max-age=300' },
     });
   } catch (error) {
-    console.error('Subscription GET error:', error);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return handleApiError(error, { route: 'subscription-GET' });
   }
 }

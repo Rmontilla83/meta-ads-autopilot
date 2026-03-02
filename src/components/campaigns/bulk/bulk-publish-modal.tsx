@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { GeneratedCampaign } from '@/lib/gemini/types';
 
 interface BulkPublishEvent {
@@ -103,8 +104,8 @@ export function BulkPublishModal({
           }
         }
       }
-    } catch (error) {
-      console.error('Bulk publish stream error:', error);
+    } catch {
+      toast.error('Error en la publicación masiva');
       setDone(true);
     } finally {
       setPublishing(false);

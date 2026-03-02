@@ -4,11 +4,16 @@ import { getUsage } from '@/lib/usage';
 
 export type LimitFeature =
   | 'ai_generations'
+  | 'image_generations'
   | 'active_campaigns'
   | 'auto_optimizer'
   | 'pdf_reports'
   | 'bulk_create'
-  | 'advanced_analytics';
+  | 'advanced_analytics'
+  | 'ab_testing'
+  | 'funnels'
+  | 'retargeting'
+  | 'smart_scheduling';
 
 export interface LimitCheckResult {
   allowed: boolean;
@@ -17,13 +22,46 @@ export interface LimitCheckResult {
   planRequired?: string;
 }
 
-export async function checkPlanLimit(
-  userId: string,
-  feature: LimitFeature
-): Promise<LimitCheckResult> {
-  const supabase = createAdminClient();
+// ---------------------------------------------------------------------------
+// In-memory TTL cache for user plan lookups.
+// A user's plan changes infrequently (only on upgrade/downgrade), so caching
+// the plan string for 5 minutes avoids a Supabase round-trip on every AI or
+// feature-gated API call.
+// ---------------------------------------------------------------------------
+const PLAN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_PLAN_CACHE_SIZE = 500;
 
-  // Get user's plan
+interface PlanCacheEntry {
+  plan: string;
+  expiresAt: number;
+}
+
+const planCache = new Map<string, PlanCacheEntry>();
+
+/**
+ * Retrieve the user's plan, using a short-lived in-memory cache to avoid
+ * redundant DB queries within the same serverless invocation or during
+ * bursts of requests from the same user.
+ */
+async function getUserPlan(userId: string): Promise<string> {
+  const now = Date.now();
+
+  // Check cache
+  const cached = planCache.get(userId);
+  if (cached && cached.expiresAt > now) {
+    return cached.plan;
+  }
+
+  // Evict expired entries when cache grows beyond threshold
+  if (planCache.size >= MAX_PLAN_CACHE_SIZE) {
+    for (const [key, entry] of planCache) {
+      if (entry.expiresAt <= now) {
+        planCache.delete(key);
+      }
+    }
+  }
+
+  const supabase = createAdminClient();
   const { data: profile } = await supabase
     .from('profiles')
     .select('plan')
@@ -31,6 +69,25 @@ export async function checkPlanLimit(
     .single();
 
   const plan = profile?.plan ?? 'free';
+
+  planCache.set(userId, { plan, expiresAt: now + PLAN_CACHE_TTL_MS });
+
+  return plan;
+}
+
+/**
+ * Invalidate the cached plan for a user. Call this after a plan change
+ * (e.g. Stripe webhook) so subsequent checks reflect the new plan immediately.
+ */
+export function invalidatePlanCache(userId: string): void {
+  planCache.delete(userId);
+}
+
+export async function checkPlanLimit(
+  userId: string,
+  feature: LimitFeature
+): Promise<LimitCheckResult> {
+  const plan = await getUserPlan(userId);
   const limits = getPlanLimits(plan);
 
   switch (feature) {
@@ -45,8 +102,20 @@ export async function checkPlanLimit(
       };
     }
 
+    case 'image_generations': {
+      if (limits.imageGenerations === -1) return { allowed: true };
+      const usage = await getUsage(userId);
+      return {
+        allowed: usage.image_generations < limits.imageGenerations,
+        current: usage.image_generations,
+        limit: limits.imageGenerations,
+        planRequired: limits.imageGenerations < 20 ? 'starter' : 'growth',
+      };
+    }
+
     case 'active_campaigns': {
       if (limits.activeCampaigns === -1) return { allowed: true };
+      const supabase = createAdminClient();
       const { count } = await supabase
         .from('campaigns')
         .select('id', { count: 'exact', head: true })
@@ -82,6 +151,30 @@ export async function checkPlanLimit(
     case 'advanced_analytics':
       return {
         allowed: limits.advancedAnalytics,
+        planRequired: 'growth',
+      };
+
+    case 'ab_testing':
+      return {
+        allowed: limits.abTesting,
+        planRequired: 'growth',
+      };
+
+    case 'funnels':
+      return {
+        allowed: limits.funnels,
+        planRequired: 'growth',
+      };
+
+    case 'retargeting':
+      return {
+        allowed: limits.retargeting,
+        planRequired: 'growth',
+      };
+
+    case 'smart_scheduling':
+      return {
+        allowed: limits.smartScheduling,
         planRequired: 'growth',
       };
 

@@ -3,19 +3,32 @@ import { stripe } from '@/lib/stripe';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPlanByStripePrice } from '@/lib/plans';
 import { createNotification } from '@/lib/notifications';
+import { invalidatePlanCache } from '@/lib/plan-limits';
 import type Stripe from 'stripe';
+
+// Helper to safely convert a value to an ISO date string
+function toISODate(val: unknown): string {
+  if (!val) return new Date().toISOString();
+  if (typeof val === 'number') {
+    // Unix timestamps from Stripe (could be seconds or ms)
+    const ts = val < 1e12 ? val * 1000 : val;
+    return new Date(ts).toISOString();
+  }
+  if (typeof val === 'string') return new Date(val).toISOString();
+  return new Date().toISOString();
+}
 
 // Helper to extract subscription data regardless of SDK version
 function getSubData(sub: Stripe.Subscription | Stripe.Response<Stripe.Subscription>) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = sub as any;
   return {
-    id: s.id as string,
+    id: String(s.id || ''),
     items: s.items as Stripe.Subscription['items'],
-    current_period_start: s.current_period_start as number,
-    current_period_end: s.current_period_end as number,
-    cancel_at_period_end: s.cancel_at_period_end as boolean,
-    status: s.status as Stripe.Subscription.Status,
+    current_period_start: s.current_period_start,
+    current_period_end: s.current_period_end,
+    cancel_at_period_end: Boolean(s.cancel_at_period_end),
+    status: String(s.status || 'active') as Stripe.Subscription.Status,
   };
 }
 
@@ -66,8 +79,8 @@ export async function POST(request: Request) {
           plan: planInfo.plan,
           status: 'active',
           billing_interval: planInfo.interval as 'monthly' | 'annual',
-          current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-          current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          current_period_start: toISODate(subscription.current_period_start),
+          current_period_end: toISODate(subscription.current_period_end),
           cancel_at_period_end: subscription.cancel_at_period_end,
         }, { onConflict: 'user_id' });
 
@@ -75,6 +88,9 @@ export async function POST(request: Request) {
           plan: planInfo.plan,
           stripe_customer_id: session.customer as string,
         }).eq('id', userId);
+
+        // Invalidate cached plan so subsequent limit checks use the new plan
+        invalidatePlanCache(userId);
 
         await createNotification({
           user_id: userId,
@@ -112,13 +128,14 @@ export async function POST(request: Request) {
           plan: planInfo?.plan ?? 'free',
           status,
           billing_interval: planInfo?.interval as 'monthly' | 'annual' | undefined,
-          current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-          current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          current_period_start: toISODate(subscription.current_period_start),
+          current_period_end: toISODate(subscription.current_period_end),
           cancel_at_period_end: subscription.cancel_at_period_end,
         }).eq('stripe_subscription_id', subscription.id);
 
         if (status === 'active' && planInfo) {
           await supabase.from('profiles').update({ plan: planInfo.plan }).eq('id', sub.user_id);
+          invalidatePlanCache(sub.user_id);
         }
 
         if (subscription.cancel_at_period_end) {
@@ -149,6 +166,9 @@ export async function POST(request: Request) {
         }).eq('stripe_subscription_id', rawSub.id);
 
         await supabase.from('profiles').update({ plan: 'free' }).eq('id', sub.user_id);
+
+        // Invalidate cached plan so limit checks reflect the downgrade
+        invalidatePlanCache(sub.user_id);
 
         await createNotification({
           user_id: sub.user_id,
@@ -203,7 +223,8 @@ export async function POST(request: Request) {
       }
     }
   } catch (error) {
-    console.error('Webhook handler error:', error);
+    const msg = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    console.error('Webhook handler error:', msg, error instanceof Error ? error.stack : '');
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 });
   }
 

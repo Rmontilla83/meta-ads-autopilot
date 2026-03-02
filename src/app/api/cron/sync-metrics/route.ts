@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { MetaAdsClient } from '@/lib/meta/client';
 import { decrypt } from '@/lib/encryption';
-import { evaluateAllRules } from '@/lib/automation/engine';
+import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api-errors';
+import { requireCronAuth } from '@/lib/auth-utils';
+import { detectFatigue } from '@/lib/creative-fatigue/detector';
+import { createNotification } from '@/lib/notifications';
 
 function extractConversions(actions: Array<{ action_type: string; value: string }> | undefined): number {
   if (!actions) return 0;
@@ -21,15 +25,10 @@ function extractLeads(actions: Array<{ action_type: string; value: string }> | u
 }
 
 export async function GET(request: Request) {
-  // Verify cron secret
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const supabase = createAdminClient();
-
   try {
+    requireCronAuth(request);
+
+    const supabase = createAdminClient();
     // Get all active meta connections
     const { data: connections, error: connError } = await supabase
       .from('meta_connections')
@@ -52,36 +51,57 @@ export async function GET(request: Request) {
     let totalSynced = 0;
 
     for (const conn of connections) {
+      // Store campaigns data at connection scope so fatigue detection can reuse it
+      let userCampaigns: Array<{ id: string; meta_campaign_id: string; name: string; status: string }> = [];
+
       try {
         const accessToken = decrypt(conn.access_token_encrypted);
         const client = new MetaAdsClient(accessToken);
 
-        // Get campaigns with meta_campaign_id
+        // Get campaigns with meta_campaign_id — include name and status for later use
         const { data: campaigns } = await supabase
           .from('campaigns')
-          .select('id, meta_campaign_id')
+          .select('id, meta_campaign_id, name, status')
           .eq('user_id', conn.user_id)
           .not('meta_campaign_id', 'is', null)
           .in('status', ['active', 'paused']);
 
         if (!campaigns?.length) continue;
+        userCampaigns = campaigns as typeof userCampaigns;
+
+        // Sync campaign statuses from Meta → Supabase (parallelized)
+        await Promise.all(campaigns.map(async (campaign) => {
+          try {
+            const metaStatus = await client.getCampaignStatus(campaign.meta_campaign_id!);
+            const effective = metaStatus.effective_status?.toUpperCase();
+            let appStatus: string | null = null;
+
+            if (effective === 'ACTIVE') appStatus = 'active';
+            else if (effective === 'PAUSED' || effective === 'CAMPAIGN_PAUSED' || effective === 'ADSET_PAUSED') appStatus = 'paused';
+            else if (effective === 'DELETED' || effective === 'ARCHIVED') appStatus = 'archived';
+
+            if (appStatus) {
+              await supabase
+                .from('campaigns')
+                .update({ status: appStatus })
+                .eq('id', campaign.id)
+                .neq('status', appStatus);
+            }
+          } catch (statusError) {
+            logger.error(`Error syncing status for campaign ${campaign.id}`, { route: '/api/cron/sync-metrics' }, statusError);
+          }
+        }));
 
         for (const campaign of campaigns) {
           try {
-            // 1. Base metrics (daily)
-            const baseInsights = await client.getCampaignInsights(campaign.meta_campaign_id!, dateRange);
-
-            // 2. Breakdown by age
-            const ageInsights = await client.getCampaignInsights(campaign.meta_campaign_id!, dateRange, 'age');
-
-            // 3. Breakdown by gender
-            const genderInsights = await client.getCampaignInsights(campaign.meta_campaign_id!, dateRange, 'gender');
-
-            // 4. Breakdown by placement
-            const placementInsights = await client.getCampaignInsights(campaign.meta_campaign_id!, dateRange, 'publisher_platform,platform_position');
-
-            // 5. Breakdown by device
-            const deviceInsights = await client.getCampaignInsights(campaign.meta_campaign_id!, dateRange, 'device_platform');
+            // Fetch base metrics + all 4 breakdowns in parallel
+            const [baseInsights, ageInsights, genderInsights, placementInsights, deviceInsights] = await Promise.all([
+              client.getCampaignInsights(campaign.meta_campaign_id!, dateRange),
+              client.getCampaignInsights(campaign.meta_campaign_id!, dateRange, 'age'),
+              client.getCampaignInsights(campaign.meta_campaign_id!, dateRange, 'gender'),
+              client.getCampaignInsights(campaign.meta_campaign_id!, dateRange, 'publisher_platform,platform_position'),
+              client.getCampaignInsights(campaign.meta_campaign_id!, dateRange, 'device_platform'),
+            ]);
 
             // Group breakdowns by date
             const breakdownsByDate: Record<string, {
@@ -125,7 +145,9 @@ export async function GET(request: Request) {
             if (placementInsights.data) buildBreakdown(placementInsights.data, ['publisher_platform', 'platform_position'], 'placement');
             if (deviceInsights.data) buildBreakdown(deviceInsights.data, 'device_platform', 'device');
 
-            // Upsert daily metrics
+            // Build all metric rows for batch upsert
+            const metricsToUpsert: Array<Record<string, unknown>> = [];
+
             for (const row of (baseInsights.data || [])) {
               const date = row.date_start as string;
               const impressions = parseInt(row.impressions as string, 10) || 0;
@@ -144,33 +166,38 @@ export async function GET(request: Request) {
 
               const dateBreakdowns = breakdownsByDate[date] || { age: [], gender: [], placement: [], device: [] };
 
+              metricsToUpsert.push({
+                campaign_id: campaign.id,
+                user_id: conn.user_id,
+                date,
+                impressions,
+                reach,
+                clicks,
+                spend,
+                conversions,
+                leads,
+                ctr: Math.round(ctr * 10000) / 10000,
+                cpc: Math.round(cpc * 10000) / 10000,
+                cpm: Math.round(cpm * 10000) / 10000,
+                cpa: Math.round(cpa * 10000) / 10000,
+                frequency: Math.round(frequency * 10000) / 10000,
+                breakdown_age: dateBreakdowns.age,
+                breakdown_gender: dateBreakdowns.gender,
+                breakdown_placement: dateBreakdowns.placement,
+                breakdown_device: dateBreakdowns.device,
+              });
+            }
+
+            // Batch upsert all daily metrics for this campaign at once
+            if (metricsToUpsert.length > 0) {
               await supabase
                 .from('campaign_metrics')
-                .upsert({
-                  campaign_id: campaign.id,
-                  user_id: conn.user_id,
-                  date,
-                  impressions,
-                  reach,
-                  clicks,
-                  spend,
-                  conversions,
-                  leads,
-                  ctr: Math.round(ctr * 10000) / 10000,
-                  cpc: Math.round(cpc * 10000) / 10000,
-                  cpm: Math.round(cpm * 10000) / 10000,
-                  cpa: Math.round(cpa * 10000) / 10000,
-                  frequency: Math.round(frequency * 10000) / 10000,
-                  breakdown_age: dateBreakdowns.age,
-                  breakdown_gender: dateBreakdowns.gender,
-                  breakdown_placement: dateBreakdowns.placement,
-                  breakdown_device: dateBreakdowns.device,
-                }, { onConflict: 'campaign_id,date' });
+                .upsert(metricsToUpsert, { onConflict: 'campaign_id,date' });
 
-              totalSynced++;
+              totalSynced += metricsToUpsert.length;
             }
           } catch (campaignError) {
-            console.error(`Error syncing campaign ${campaign.id}:`, campaignError);
+            logger.error(`Error syncing campaign ${campaign.id}`, { route: '/api/cron/sync-metrics' }, campaignError);
           }
         }
       } catch (userError) {
@@ -182,20 +209,151 @@ export async function GET(request: Request) {
             .update({ is_active: false })
             .eq('user_id', conn.user_id);
         }
-        console.error(`Error syncing user ${conn.user_id}:`, userError);
+        logger.error(`Error syncing user ${conn.user_id}`, { route: '/api/cron/sync-metrics' }, userError);
+      }
+
+      // --- Creative Fatigue Detection (reuses userCampaigns from above) ---
+      try {
+        // Filter to only active campaigns (already fetched, no re-query needed)
+        const activeCampaigns = userCampaigns.filter(c => c.status === 'active');
+        if (!activeCampaigns.length) continue;
+
+        // Batch-fetch all campaign_ads for all active campaigns in one query
+        const activeCampaignIds = activeCampaigns.map(c => c.id);
+        const { data: allAds } = await supabase
+          .from('campaign_ads')
+          .select('id, name, meta_ad_id, campaign_id')
+          .in('campaign_id', activeCampaignIds)
+          .not('meta_ad_id', 'is', null);
+
+        if (!allAds?.length) continue;
+
+        // Batch-fetch all recent metrics for all active campaigns in one query
+        const { data: allMetrics } = await supabase
+          .from('campaign_metrics')
+          .select('campaign_id, date, impressions, clicks, frequency')
+          .in('campaign_id', activeCampaignIds)
+          .order('date', { ascending: true })
+          .limit(14 * activeCampaignIds.length);
+
+        if (!allMetrics?.length) continue;
+
+        // Group ads and metrics by campaign_id
+        const adsByCampaign = new Map<string, typeof allAds>();
+        for (const ad of allAds) {
+          const list = adsByCampaign.get(ad.campaign_id) || [];
+          list.push(ad);
+          adsByCampaign.set(ad.campaign_id, list);
+        }
+
+        const metricsByCampaign = new Map<string, typeof allMetrics>();
+        for (const metric of allMetrics) {
+          const list = metricsByCampaign.get(metric.campaign_id) || [];
+          list.push(metric);
+          metricsByCampaign.set(metric.campaign_id, list);
+        }
+
+        // Build a campaign name lookup from the already-fetched data
+        const campaignNameMap = new Map(userCampaigns.map(c => [c.id, c.name]));
+
+        for (const campaign of activeCampaigns) {
+          const ads = adsByCampaign.get(campaign.id);
+          const metrics = metricsByCampaign.get(campaign.id);
+          if (!ads?.length || !metrics?.length) continue;
+
+          const adMetrics = ads.map(ad => ({
+            adId: ad.id,
+            metaAdId: ad.meta_ad_id!,
+            adName: ad.name || 'Anuncio',
+            campaignId: campaign.id,
+            campaignName: campaignNameMap.get(campaign.id) || 'Campaña',
+            dailyData: metrics.map(m => ({
+              date: m.date,
+              impressions: Math.round((m.impressions || 0) / ads.length),
+              clicks: Math.round((m.clicks || 0) / ads.length),
+              frequency: m.frequency || 0,
+            })),
+          }));
+
+          const fatigueResults = detectFatigue(adMetrics);
+          const newFatigued = fatigueResults.filter(r => r.status === 'fatigued');
+          const nonHealthy = fatigueResults.filter(r => r.status !== 'healthy');
+
+          if (nonHealthy.length > 0) {
+            // Batch-fetch existing creative_rotations for all non-healthy ads
+            const nonHealthyAdIds = nonHealthy.map(r => r.adId);
+            const { data: existingRotations } = await supabase
+              .from('creative_rotations')
+              .select('id, ad_id, status')
+              .eq('user_id', conn.user_id)
+              .in('ad_id', nonHealthyAdIds)
+              .in('status', ['warning', 'fatigued']);
+
+            const existingByAdId = new Map(
+              (existingRotations || []).map(r => [r.ad_id, r])
+            );
+
+            // Collect inserts and updates
+            const rotationsToInsert: Array<Record<string, unknown>> = [];
+            const rotationsToUpdate: Array<{ id: string; status: string; frequency: number; ctr: number }> = [];
+
+            for (const result of nonHealthy) {
+              const existing = existingByAdId.get(result.adId);
+
+              if (!existing) {
+                rotationsToInsert.push({
+                  user_id: conn.user_id,
+                  campaign_id: campaign.id,
+                  ad_id: result.adId,
+                  meta_ad_id: result.metaAdId,
+                  status: result.status,
+                  frequency_at_detection: result.frequency,
+                  ctr_at_detection: result.ctrCurrent,
+                  ctr_baseline: result.ctrBaseline,
+                  ctr_drop_percentage: result.ctrDropPercentage,
+                  impressions_at_detection: result.impressions,
+                });
+              } else if (existing.status !== result.status) {
+                rotationsToUpdate.push({
+                  id: existing.id,
+                  status: result.status,
+                  frequency: result.frequency,
+                  ctr: result.ctrCurrent,
+                });
+              }
+            }
+
+            // Batch insert new rotations
+            if (rotationsToInsert.length > 0) {
+              await supabase.from('creative_rotations').insert(rotationsToInsert);
+            }
+
+            // Update rotations that changed status (must be individual since each has different id)
+            await Promise.all(rotationsToUpdate.map(r =>
+              supabase.from('creative_rotations')
+                .update({ status: r.status, frequency_at_detection: r.frequency, ctr_at_detection: r.ctr })
+                .eq('id', r.id)
+            ));
+          }
+
+          if (newFatigued.length > 0) {
+            await createNotification({
+              user_id: conn.user_id,
+              type: 'performance_alert',
+              title: `${newFatigued.length} anuncio(s) con fatiga creativa`,
+              message: `Se detectaron anuncios con CTR en declive y frecuencia alta. Considera rotar los creativos.`,
+              metadata: { campaign_id: campaign.id, fatigued_count: newFatigued.length },
+            });
+          }
+        }
+      } catch (fatigueError) {
+        logger.error('Fatigue detection error', { route: '/api/cron/sync-metrics' }, fatigueError);
       }
     }
 
-    // Evaluate automation rules after metrics sync
-    try {
-      await evaluateAllRules();
-    } catch (rulesError) {
-      console.error('Error evaluating automation rules:', rulesError);
-    }
-
+    logger.info('Metrics sync complete', { route: '/api/cron/sync-metrics', synced: totalSynced });
     return NextResponse.json({ message: 'Sync complete', synced: totalSynced });
   } catch (error) {
-    console.error('Cron sync error:', error);
-    return NextResponse.json({ error: 'Sync failed' }, { status: 500 });
+    return handleApiError(error, { route: '/api/cron/sync-metrics' });
   }
 }

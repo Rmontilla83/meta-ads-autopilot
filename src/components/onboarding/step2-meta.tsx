@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { MetaConnectionStatus } from '@/components/meta/meta-connection-status';
 import { AlertTriangle, ArrowLeft, ArrowRight, Link2, Loader2, SkipForward } from 'lucide-react';
+import { toast } from 'sonner';
 import type { MetaAdAccount, MetaPage, MetaPixel, MetaConnection } from '@/types';
 
 interface Step2Props {
@@ -67,8 +68,8 @@ export function Step2Meta({ connection, metaError, onNext, onSkip, onBack }: Ste
         const data = await res.json();
         setAdAccounts(data.data || []);
       }
-    } catch (err) {
-      console.error('Error fetching ad accounts:', err);
+    } catch {
+      toast.error('Error al cargar las cuentas publicitarias');
     } finally {
       setLoadingAccounts(false);
     }
@@ -82,8 +83,8 @@ export function Step2Meta({ connection, metaError, onNext, onSkip, onBack }: Ste
         const data = await res.json();
         setPages(data.data || []);
       }
-    } catch (err) {
-      console.error('Error fetching pages:', err);
+    } catch {
+      toast.error('Error al cargar las páginas de Facebook');
     } finally {
       setLoadingPages(false);
     }
@@ -97,8 +98,8 @@ export function Step2Meta({ connection, metaError, onNext, onSkip, onBack }: Ste
         const data = await res.json();
         setPixels(data.data || []);
       }
-    } catch (err) {
-      console.error('Error fetching pixels:', err);
+    } catch {
+      toast.error('Error al cargar los píxeles');
     } finally {
       setLoadingPixels(false);
     }

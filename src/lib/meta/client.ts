@@ -4,6 +4,15 @@ import { createAdminClient } from '@/lib/supabase/admin';
 const META_API_VERSION = 'v21.0';
 const META_GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 
+export interface GeoLocation {
+  key: string;
+  name: string;
+  type: string;
+  country_code: string;
+  region?: string;
+  region_id?: string;
+}
+
 export class MetaAdsClient {
   private accessToken: string;
 
@@ -40,7 +49,15 @@ export class MetaAdsClient {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error?.message || `Meta API error: ${response.status}`);
+      const metaErr = error.error || {};
+      console.error('[Meta API Error] endpoint:', endpoint);
+      console.error('[Meta API Error] code:', metaErr.code, 'subcode:', metaErr.error_subcode);
+      console.error('[Meta API Error] message:', metaErr.message);
+      console.error('[Meta API Error] user_title:', metaErr.error_user_title);
+      console.error('[Meta API Error] user_msg:', metaErr.error_user_msg);
+      console.error('[Meta API Error] sent_data:', JSON.stringify(data).substring(0, 1000));
+      const detail = metaErr.error_user_msg || metaErr.error_user_title || metaErr.message || `Meta API error: ${response.status}`;
+      throw new Error(detail);
     }
 
     return response.json();
@@ -51,6 +68,7 @@ export class MetaAdsClient {
     objective: string;
     status: string;
     special_ad_categories: string[];
+    is_adset_budget_sharing_enabled?: boolean;
   }): Promise<{ id: string }> {
     return this.post(`/${adAccountId}/campaigns`, data);
   }
@@ -91,11 +109,16 @@ export class MetaAdsClient {
     adset_id: string;
     creative: { creative_id: string };
     status: string;
+    tracking_specs?: Array<Record<string, unknown>>;
   }): Promise<{ id: string }> {
     return this.post(`/${adAccountId}/ads`, {
       ...data,
       adset_id: adSetId,
     });
+  }
+
+  async getCampaignStatus(campaignId: string): Promise<{ effective_status: string; status: string }> {
+    return this.request(`/${campaignId}`, { fields: 'effective_status,status' });
   }
 
   async updateCampaignStatus(campaignId: string, status: string): Promise<{ success: boolean }> {
@@ -217,6 +240,119 @@ export class MetaAdsClient {
 
   async updateAdSetBudget(adSetId: string, dailyBudgetCents: number): Promise<{ success: boolean }> {
     return this.post(`/${adSetId}`, { daily_budget: dailyBudgetCents });
+  }
+
+  // === Advanced Optimization Methods ===
+
+  async createCustomAudience(adAccountId: string, data: {
+    name: string;
+    subtype: string;
+    description?: string;
+    customer_file_source?: string;
+    rule?: Record<string, unknown>;
+    pixel_id?: string;
+    retention_days?: number;
+    prefill?: boolean;
+  }): Promise<{ id: string }> {
+    return this.post(`/${adAccountId}/customaudiences`, data);
+  }
+
+  async createLookalikeAudience(adAccountId: string, data: {
+    name: string;
+    origin_audience_id: string;
+    lookalike_spec: {
+      type: string;
+      ratio: number;
+      country: string;
+    };
+    subtype: string;
+  }): Promise<{ id: string }> {
+    return this.post(`/${adAccountId}/customaudiences`, {
+      name: data.name,
+      subtype: 'LOOKALIKE',
+      origin_audience_id: data.origin_audience_id,
+      lookalike_spec: JSON.stringify(data.lookalike_spec),
+    });
+  }
+
+  async getCustomAudiences(adAccountId: string): Promise<{ data: Array<{
+    id: string;
+    name: string;
+    subtype: string;
+    approximate_count: number;
+    delivery_status: Record<string, unknown>;
+  }> }> {
+    return this.request(`/${adAccountId}/customaudiences`, {
+      fields: 'id,name,subtype,approximate_count,delivery_status',
+      limit: '100',
+    });
+  }
+
+  async deleteCustomAudience(audienceId: string): Promise<{ success: boolean }> {
+    return this.deleteObject(audienceId);
+  }
+
+  async updateAdSetSchedule(adSetId: string, schedule: Array<{
+    start_minute: number;
+    end_minute: number;
+    days: number[];
+    timezone_type: string;
+  }>): Promise<{ success: boolean }> {
+    return this.post(`/${adSetId}`, {
+      adset_schedule: JSON.stringify(schedule),
+      pacing_type: ['day_parting'],
+    });
+  }
+
+  async getAdSet(adSetId: string): Promise<Record<string, unknown>> {
+    return this.request(`/${adSetId}`, {
+      fields: 'id,name,campaign_id,targeting,optimization_goal,billing_event,bid_strategy,daily_budget,status,promoted_object',
+    });
+  }
+
+  async getAdsInAdSet(adSetId: string): Promise<{ data: Array<Record<string, unknown>> }> {
+    return this.request(`/${adSetId}/ads`, {
+      fields: 'id,name,status,creative{id,name,body,title,image_url,thumbnail_url}',
+      limit: '100',
+    });
+  }
+
+  async getCampaignInsightsHourly(
+    campaignId: string,
+    dateRange: { since: string; until: string }
+  ): Promise<{ data: Array<Record<string, unknown>> }> {
+    return this.request(`/${campaignId}/insights`, {
+      fields: 'impressions,reach,clicks,spend,cpc,cpm,ctr,actions,hourly_stats_aggregated_by_advertiser_time_zone',
+      time_range: JSON.stringify(dateRange),
+      breakdowns: 'hourly_stats_aggregated_by_advertiser_time_zone',
+    });
+  }
+
+  async searchInterests(query: string): Promise<{ data: Array<{ id: string; name: string; audience_size_lower_bound?: number; audience_size_upper_bound?: number }> }> {
+    return this.request('/search', {
+      type: 'adinterest',
+      q: query,
+    });
+  }
+
+  async searchGeoLocations(params: {
+    location_type: 'region' | 'city';
+    country_code: string;
+    q?: string;
+    region_id?: string;
+  }): Promise<{ data: GeoLocation[] }> {
+    const searchParams: Record<string, string> = {
+      type: 'adgeolocation',
+      'location_types': `["${params.location_type}"]`,
+      country_code: params.country_code,
+    };
+    if (params.q) {
+      searchParams.q = params.q;
+    }
+    if (params.region_id) {
+      searchParams.region_id = params.region_id;
+    }
+    return this.request('/search', searchParams);
   }
 }
 

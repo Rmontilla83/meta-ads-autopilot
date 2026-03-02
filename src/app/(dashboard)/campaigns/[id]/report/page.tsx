@@ -4,9 +4,16 @@ import { useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, Loader2 } from 'lucide-react';
-import { ReportConfigForm, type ReportConfig } from '@/components/reports/report-config-form';
-import { WebReport } from '@/components/reports/web-report';
+import dynamic from 'next/dynamic';
+import type { ReportConfig } from '@/components/reports/report-config-form';
 import { UpgradeModal } from '@/components/plan/upgrade-modal';
+
+const ReportConfigForm = dynamic(() => import('@/components/reports/report-config-form').then(m => m.ReportConfigForm), {
+  loading: () => <div className="h-40 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
+const WebReport = dynamic(() => import('@/components/reports/web-report').then(m => m.WebReport), {
+  loading: () => <div className="h-60 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
 import { useUser } from '@/hooks/useUser';
 import { usePlan } from '@/hooks/usePlan';
 import { toast } from 'sonner';

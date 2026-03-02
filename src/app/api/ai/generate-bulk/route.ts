@@ -1,16 +1,19 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
 import { getGeminiPro, generateStructuredJSON } from '@/lib/gemini/client';
 import { CAMPAIGN_STRATEGIST, buildCampaignStrategyPrompt } from '@/lib/gemini/prompts';
 import { campaignStrategySchema } from '@/lib/gemini/validators';
+import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitResponse, handleApiError } from '@/lib/api-errors';
+import { sanitizeString } from '@/lib/validators';
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    const { success, resetAt } = await rateLimit(`gen-bulk:${user.id}`, { maxRequests: 5, windowMs: 60_000 });
+    if (!success) {
+      return rateLimitResponse(resetAt);
     }
 
     const { prompt, count = 3 } = await request.json();
@@ -19,6 +22,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Prompt es requerido' }, { status: 400 });
     }
 
+    // Sanitize text input
+    const sanitizedPrompt = sanitizeString(prompt, 5000);
     const campaignCount = Math.min(Math.max(1, count), 10);
 
     // Get business profile
@@ -46,7 +51,7 @@ export async function POST(request: Request) {
           monthly_budget: businessProfile.monthly_budget,
           brand_tone: businessProfile.brand_tone,
         },
-        user_goal: `${prompt} (Variación ${i + 1} de ${campaignCount} — genera una estrategia diferente a las anteriores)`,
+        user_goal: `${sanitizedPrompt} (Variación ${i + 1} de ${campaignCount} — genera una estrategia diferente a las anteriores)`,
         budget: undefined,
       });
 
@@ -64,8 +69,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ campaigns });
   } catch (error) {
-    console.error('Generate bulk error:', error);
-    const message = error instanceof Error ? error.message : 'Error al generar campañas';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleApiError(error, { route: 'ai/generate-bulk' });
   }
 }

@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
+import { handleApiError, rateLimitResponse } from '@/lib/api-errors';
+import { rateLimit } from '@/lib/rate-limit';
 import { stripe } from '@/lib/stripe';
 import { STRIPE_PRICE_MAP } from '@/lib/plans';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const { success, resetAt } = await rateLimit(`stripe-checkout:${user.id}`, { maxRequests: 5, windowMs: 60_000 });
+    if (!success) return rateLimitResponse(resetAt);
 
     const { planKey, interval } = await request.json() as {
       planKey: string;
@@ -73,8 +73,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error('Create checkout error:', error);
-    const message = error instanceof Error ? error.message : 'Error al crear sesión de pago';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleApiError(error, { route: 'stripe-create-checkout' });
   }
 }

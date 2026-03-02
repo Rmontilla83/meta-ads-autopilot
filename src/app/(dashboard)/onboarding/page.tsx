@@ -4,14 +4,17 @@ import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useUser } from '@/hooks/useUser';
-import { Step1Business, type BusinessFormData } from '@/components/onboarding/step1-business';
+import { Step1Business, type BusinessFormData, type BrandFormData } from '@/components/onboarding/step1-business';
 import { Step2Meta } from '@/components/onboarding/step2-meta';
 import { Step3Goals, type GoalsFormData } from '@/components/onboarding/step3-goals';
+import { Step4Personas } from '@/components/onboarding/step4-personas';
 import { Step4Summary } from '@/components/onboarding/step4-summary';
 import { cn } from '@/lib/utils';
 import { Check, Zap } from 'lucide-react';
+import { toast } from 'sonner';
+import type { BuyerPersona, SalesAngle } from '@/types';
 
-const stepLabels = ['Negocio', 'Meta', 'Objetivos', 'Confirmar'];
+const stepLabels = ['Negocio', 'Meta', 'Objetivos', 'Audiencia', 'Confirmar'];
 
 function OnboardingContent() {
   const { user, profile, metaConnection, refresh } = useUser();
@@ -26,6 +29,8 @@ function OnboardingContent() {
     pixel_name: string;
   } | null>(null);
   const [goalsData, setGoalsData] = useState<GoalsFormData | null>(null);
+  const [personasData, setPersonasData] = useState<{ buyer_personas: BuyerPersona[]; sales_angles: SalesAngle[] } | null>(null);
+  const [brandFormData, setBrandFormData] = useState<BrandFormData | null>(null);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -34,12 +39,65 @@ function OnboardingContent() {
   const metaError = searchParams.get('meta_error');
   const metaConnected = searchParams.get('meta_connected');
 
-  // Resume at correct step
+  // Resume at correct step and reload saved data from DB
   useEffect(() => {
     if (profile?.onboarding_step && profile.onboarding_step > 0) {
-      setCurrentStep(Math.min(profile.onboarding_step, 3));
+      setCurrentStep(Math.min(profile.onboarding_step, 4));
     }
-  }, [profile?.onboarding_step]);
+
+    // Reload business + goals data from DB so step 4 renders on page refresh
+    if (user && !businessData) {
+      supabase
+        .from('business_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            setBusinessData({
+              business_name: data.business_name || '',
+              industry: data.industry || '',
+              description: data.description || '',
+              location: data.location || '',
+              website: data.website || '',
+              whatsapp: data.whatsapp || '',
+            });
+            if (data.objectives?.length) {
+              setGoalsData({
+                objectives: data.objectives,
+                monthly_budget: data.monthly_budget || '',
+                experience_level: data.experience_level || 'principiante',
+                brand_tone: data.brand_tone || 'profesional',
+              });
+            }
+            if (data.buyer_personas?.length || data.sales_angles?.length) {
+              setPersonasData({
+                buyer_personas: data.buyer_personas || [],
+                sales_angles: data.sales_angles || [],
+              });
+            }
+            if (data.logo_url || data.brand_colors || data.brand_typography) {
+              setBrandFormData({
+                logo_url: data.logo_url || null,
+                brand_colors: data.brand_colors || null,
+                brand_typography: data.brand_typography || null,
+              });
+            }
+          }
+        });
+    }
+
+    if (metaConnection && !metaSelections) {
+      setMetaSelections({
+        ad_account_id: metaConnection.ad_account_id || '',
+        ad_account_name: metaConnection.ad_account_name || '',
+        page_id: metaConnection.page_id || '',
+        page_name: metaConnection.page_name || '',
+        pixel_id: metaConnection.pixel_id || '',
+        pixel_name: metaConnection.pixel_name || '',
+      });
+    }
+  }, [profile?.onboarding_step, user, metaConnection]);
 
   // If returning from Meta OAuth, land on step 2
   useEffect(() => {
@@ -57,8 +115,9 @@ function OnboardingContent() {
       .eq('id', user.id);
   };
 
-  const handleStep1 = async (data: BusinessFormData) => {
+  const handleStep1 = async (data: BusinessFormData, brand: BrandFormData) => {
     setBusinessData(data);
+    setBrandFormData(brand);
 
     if (user) {
       await supabase.from('business_profiles').upsert(
@@ -70,6 +129,9 @@ function OnboardingContent() {
           location: data.location || null,
           website: data.website || null,
           whatsapp: data.whatsapp || null,
+          logo_url: brand.logo_url,
+          brand_colors: brand.brand_colors,
+          brand_typography: brand.brand_typography,
         },
         { onConflict: 'user_id' }
       );
@@ -132,6 +194,28 @@ function OnboardingContent() {
     setCurrentStep(3);
   };
 
+  const handleStep4Personas = async (data: { buyer_personas: BuyerPersona[]; sales_angles: SalesAngle[] }) => {
+    setPersonasData(data);
+
+    if (user) {
+      await supabase
+        .from('business_profiles')
+        .update({
+          buyer_personas: data.buyer_personas,
+          sales_angles: data.sales_angles,
+        })
+        .eq('user_id', user.id);
+    }
+
+    await saveStep(4);
+    setCurrentStep(4);
+  };
+
+  const handleSkipPersonas = async () => {
+    await saveStep(4);
+    setCurrentStep(4);
+  };
+
   const handleConfirm = async () => {
     if (!user) return;
     setSaving(true);
@@ -141,14 +225,14 @@ function OnboardingContent() {
         .from('profiles')
         .update({
           onboarding_completed: true,
-          onboarding_step: 4,
+          onboarding_step: 5,
         })
         .eq('id', user.id);
 
       router.push('/dashboard');
       router.refresh();
-    } catch (error) {
-      console.error('Error completing onboarding:', error);
+    } catch {
+      toast.error('Error al completar el onboarding. Intenta de nuevo.');
     } finally {
       setSaving(false);
     }
@@ -201,6 +285,7 @@ function OnboardingContent() {
           {currentStep === 0 && (
             <Step1Business
               defaultValues={businessData || undefined}
+              defaultBrand={brandFormData || undefined}
               onNext={handleStep1}
             />
           )}
@@ -220,13 +305,22 @@ function OnboardingContent() {
               onBack={() => setCurrentStep(1)}
             />
           )}
-          {currentStep === 3 && businessData && goalsData && (
+          {currentStep === 3 && (
+            <Step4Personas
+              defaultPersonas={personasData?.buyer_personas}
+              defaultAngles={personasData?.sales_angles}
+              onNext={handleStep4Personas}
+              onSkip={handleSkipPersonas}
+              onBack={() => setCurrentStep(2)}
+            />
+          )}
+          {currentStep === 4 && businessData && goalsData && (
             <Step4Summary
               businessData={businessData}
               metaData={metaSelections || { ad_account_name: '', page_name: '', pixel_name: '' }}
               goalsData={goalsData}
               onConfirm={handleConfirm}
-              onBack={() => setCurrentStep(2)}
+              onBack={() => setCurrentStep(3)}
               loading={saving}
             />
           )}

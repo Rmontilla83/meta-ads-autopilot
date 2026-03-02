@@ -1,21 +1,21 @@
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
 import { getGeminiFlash, streamChat } from '@/lib/gemini/client';
 import { checkPlanLimit } from '@/lib/plan-limits';
 import { incrementUsage } from '@/lib/usage';
+import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitResponse, handleApiError } from '@/lib/api-errors';
+import { sanitizeString } from '@/lib/validators';
 import type { ChatMessage } from '@/lib/gemini/types';
 import type { BusinessProfile } from '@/types';
 import type { GeneratedCampaign } from '@/lib/gemini/types';
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'No autorizado' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    const { success, resetAt } = await rateLimit(`ai-chat:${user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    if (!success) {
+      return rateLimitResponse(resetAt);
     }
 
     // Check AI generation limit
@@ -52,11 +52,34 @@ export async function POST(request: Request) {
       });
     }
 
+    // Sanitize user input
+    const sanitizedContent = sanitizeString(lastUserMessage.content, 10000);
+
+    // Fetch brand analysis for context
+    const { data: dbProfile } = await supabase
+      .from('business_profiles')
+      .select('brand_analysis, brand_tone, logo_url')
+      .eq('user_id', user.id)
+      .single();
+
+    const brandAnalysis = dbProfile?.brand_analysis;
+
     let systemPrompt = `Eres un asistente experto en Meta Ads para negocios en Latinoamérica. Responde siempre en español de forma concisa y útil.
 
-NEGOCIO: ${business_profile.business_name}
-INDUSTRIA: ${business_profile.industry || 'No especificada'}
-DESCRIPCIÓN: ${business_profile.description || 'No proporcionada'}`;
+NEGOCIO: ${sanitizeString(business_profile.business_name, 500)}
+INDUSTRIA: ${sanitizeString(business_profile.industry || 'No especificada', 500)}
+DESCRIPCIÓN: ${sanitizeString(business_profile.description || 'No proporcionada', 2000)}`;
+
+    if (brandAnalysis) {
+      systemPrompt += `\n\nIDENTIDAD DE MARCA:
+- Estilo visual: ${brandAnalysis.visual_style || 'No definido'}
+- Personalidad: ${brandAnalysis.personality?.join(', ') || 'No definida'}
+- Tono: ${brandAnalysis.tone_description || dbProfile?.brand_tone || 'No definido'}
+- Colores: ${brandAnalysis.color_palette?.map((c: { hex: string; name: string }) => `${c.name} (${c.hex})`).join(', ') || 'No definidos'}
+- Estilos recomendados: ${brandAnalysis.recommended_ad_styles?.join(', ') || 'No definidos'}
+
+Cuando generes copy o sugieras creativos, asegúrate de que sean coherentes con esta identidad de marca.`;
+    }
 
     if (campaign_context) {
       systemPrompt += `\n\nCAMPAÑA ACTUAL:\n${JSON.stringify(campaign_context, null, 2)}`;
@@ -77,7 +100,7 @@ DESCRIPCIÓN: ${business_profile.description || 'No proporcionada'}`;
             model,
             systemPrompt,
             history,
-            lastUserMessage.content
+            sanitizedContent
           );
 
           for await (const chunk of generator) {
@@ -102,11 +125,6 @@ DESCRIPCIÓN: ${business_profile.description || 'No proporcionada'}`;
       },
     });
   } catch (error) {
-    console.error('Chat error:', error);
-    const message = error instanceof Error ? error.message : 'Error en el chat';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return handleApiError(error, { route: 'ai/chat', userId: undefined });
   }
 }

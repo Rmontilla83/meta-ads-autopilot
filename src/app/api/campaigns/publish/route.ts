@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
 import { getMetaClientForUser } from '@/lib/meta/client';
 import { CampaignPublisher, type PublishProgress } from '@/lib/meta/publisher';
 import { createNotification } from '@/lib/notifications';
 import { checkPlanLimit } from '@/lib/plan-limits';
+import { rateLimit } from '@/lib/rate-limit';
+import { handleApiError, rateLimitResponse } from '@/lib/api-errors';
+import { logger } from '@/lib/logger';
 import type { GeneratedCampaign } from '@/lib/gemini/types';
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    const { success, resetAt } = await rateLimit(`publish:${user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    if (!success) {
+      return rateLimitResponse(resetAt);
     }
 
     // Check active campaign limit
@@ -45,7 +48,7 @@ export async function POST(request: Request) {
     // Get Meta connection info
     const { data: metaConnection } = await supabase
       .from('meta_connections')
-      .select('ad_account_id, page_id')
+      .select('ad_account_id, page_id, pixel_id')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .single();
@@ -71,7 +74,8 @@ export async function POST(request: Request) {
       campaignData,
       metaConnection.ad_account_id,
       metaConnection.page_id,
-      (p) => progress.push(p)
+      (p) => progress.push(p),
+      metaConnection.pixel_id
     );
 
     const result = await publisher.publish();
@@ -121,8 +125,6 @@ export async function POST(request: Request) {
       }, { status: 500 });
     }
   } catch (error) {
-    console.error('Publish error:', error);
-    const message = error instanceof Error ? error.message : 'Error al publicar';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleApiError(error, { route: 'campaigns/publish' });
   }
 }

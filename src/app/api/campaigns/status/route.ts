@@ -1,26 +1,28 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
 import { getMetaClientForUser } from '@/lib/meta/client';
+import { rateLimit } from '@/lib/rate-limit';
+import { handleApiError, rateLimitResponse } from '@/lib/api-errors';
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-  }
-
-  const { entityId, entityType, status } = await request.json();
-
-  if (!entityId || !entityType || !status) {
-    return NextResponse.json({ error: 'entityId, entityType y status son requeridos' }, { status: 400 });
-  }
-
-  if (!['ACTIVE', 'PAUSED'].includes(status)) {
-    return NextResponse.json({ error: 'Status debe ser ACTIVE o PAUSED' }, { status: 400 });
-  }
-
   try {
+    const { user, supabase } = await requireAuth();
+
+    const { success, resetAt } = await rateLimit(`status:${user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    if (!success) {
+      return rateLimitResponse(resetAt);
+    }
+
+    const { entityId, entityType, status } = await request.json();
+
+    if (!entityId || !entityType || !status) {
+      return NextResponse.json({ error: 'entityId, entityType y status son requeridos' }, { status: 400 });
+    }
+
+    if (!['ACTIVE', 'PAUSED'].includes(status)) {
+      return NextResponse.json({ error: 'Status debe ser ACTIVE o PAUSED' }, { status: 400 });
+    }
+
     const client = await getMetaClientForUser(user.id);
     const localStatus = status === 'ACTIVE' ? 'active' : 'paused';
 
@@ -74,10 +76,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, status: localStatus });
   } catch (error) {
-    console.error('Status update error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Error al actualizar estado' },
-      { status: 500 }
-    );
+    return handleApiError(error, { route: 'campaigns/status' });
   }
 }

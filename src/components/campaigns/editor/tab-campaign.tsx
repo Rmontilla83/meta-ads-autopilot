@@ -42,6 +42,13 @@ export function TabCampaign({ data, onChange }: TabCampaignProps) {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-lg border bg-muted/40 px-4 py-3 space-y-1">
+        <h3 className="text-sm font-semibold">Configuración de campaña</h3>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          La campaña es el nivel más alto de tu publicidad. Aquí defines <strong>qué quieres lograr</strong> (más visitas, ventas, reconocimiento de marca, etc.) y le das un nombre para identificarla. El objetivo que elijas le dice a Meta cómo optimizar la entrega de tus anuncios para obtener los mejores resultados.
+        </p>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="campaign-name">Nombre de la campaña</Label>
         <Input

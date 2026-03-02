@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { GeneratedCampaign } from '@/lib/gemini/types';
 
 interface SaveTemplateModalProps {
@@ -51,8 +52,8 @@ export function SaveTemplateModal({
         setName('');
         setDescription('');
       }
-    } catch (error) {
-      console.error('Save template error:', error);
+    } catch {
+      toast.error('Error al guardar la plantilla');
     } finally {
       setSaving(false);
     }

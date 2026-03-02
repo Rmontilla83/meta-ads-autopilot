@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { RuleExecution } from '@/types';
 
 interface RuleHistoryModalProps {
@@ -47,7 +48,7 @@ export function RuleHistoryModal({
           setExecutions(data.executions);
         }
       } catch {
-        // Silently fail
+        toast.error('Error al cargar el historial de ejecuciones');
       } finally {
         setLoading(false);
       }

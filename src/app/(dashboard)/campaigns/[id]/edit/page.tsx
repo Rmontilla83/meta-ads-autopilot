@@ -161,13 +161,18 @@ export default function CampaignEditPage() {
               data={campaignData}
               onChange={handleChange}
               businessName={businessProfile?.business_name}
+              logoUrl={businessProfile?.logo_url || undefined}
             />
           </TabsContent>
           <TabsContent value="budget">
             <TabBudget data={campaignData} onChange={handleChange} />
           </TabsContent>
           <TabsContent value="summary">
-            <TabSummary data={campaignData} />
+            <TabSummary
+              data={campaignData}
+              businessName={businessProfile?.business_name}
+              industry={businessProfile?.industry ?? undefined}
+            />
           </TabsContent>
         </div>
       </Tabs>

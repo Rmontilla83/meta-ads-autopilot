@@ -18,6 +18,7 @@ import type { GeneratedCampaign } from '@/lib/gemini/types';
 
 interface CampaignPreviewProps {
   campaign: GeneratedCampaign | null;
+  logoUrl?: string;
 }
 
 const OBJECTIVE_LABELS: Record<string, string> = {
@@ -38,7 +39,7 @@ const OBJECTIVE_ICONS: Record<string, typeof Eye> = {
   OUTCOME_APP_PROMOTION: Target,
 };
 
-export function CampaignPreview({ campaign }: CampaignPreviewProps) {
+export function CampaignPreview({ campaign, logoUrl }: CampaignPreviewProps) {
   if (!campaign) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8">
@@ -170,7 +171,9 @@ export function CampaignPreview({ campaign }: CampaignPreviewProps) {
                           headline={ad.headline}
                           description={ad.description}
                           callToAction={ad.call_to_action}
+                          logoUrl={logoUrl}
                           viewMode={mode}
+                          imageUrl={ad.image_url}
                         />
                       </div>
                     ))}

@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
+import { handleApiError, rateLimitResponse } from '@/lib/api-errors';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const { success, resetAt } = await rateLimit(`notifications:${user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    if (!success) return rateLimitResponse(resetAt);
 
     const [notificationsRes, unreadRes] = await Promise.all([
       supabase
@@ -29,7 +29,6 @@ export async function GET() {
       unread_count: unreadRes.count || 0,
     });
   } catch (error) {
-    console.error('Notifications error:', error);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return handleApiError(error, { route: 'notifications-GET' });
   }
 }

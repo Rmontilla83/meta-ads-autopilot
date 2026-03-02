@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { AutomationRule, Campaign } from '@/types';
 
 const METRICS = [
@@ -149,8 +150,8 @@ export function RuleBuilderModal({
       const data = await res.json();
       onSave(data.rule);
       onOpenChange(false);
-    } catch (error) {
-      console.error('Error saving rule:', error);
+    } catch {
+      toast.error('Error al guardar la regla de automatización');
     } finally {
       setSaving(false);
     }

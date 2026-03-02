@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
 import { getGeminiFlash, generateStructuredJSON } from '@/lib/gemini/client';
 import { AUDIENCE_EXPERT, buildAudiencePrompt } from '@/lib/gemini/prompts';
 import { audienceSuggestionsSchema } from '@/lib/gemini/validators';
 import { checkPlanLimit } from '@/lib/plan-limits';
 import { incrementUsage } from '@/lib/usage';
+import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitResponse, handleApiError } from '@/lib/api-errors';
+import { sanitizeString } from '@/lib/validators';
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    const { success, resetAt } = await rateLimit(`suggest-audiences:${user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    if (!success) {
+      return rateLimitResponse(resetAt);
     }
 
     const limitCheck = await checkPlanLimit(user.id, 'ai_generations');
@@ -36,12 +39,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
     }
 
+    // Sanitize text inputs
+    const sanitizedBusinessName = sanitizeString(business_name, 500);
+    const sanitizedObjective = sanitizeString(objective, 1000);
+    const sanitizedIndustry = industry ? sanitizeString(industry, 500) : null;
+    const sanitizedLocation = location ? sanitizeString(location, 500) : null;
+
     const model = getGeminiFlash();
     const prompt = buildAudiencePrompt({
-      business_name,
-      industry: industry || null,
-      objective,
-      location: location || null,
+      business_name: sanitizedBusinessName,
+      industry: sanitizedIndustry,
+      objective: sanitizedObjective,
+      location: sanitizedLocation,
     });
 
     const result = await generateStructuredJSON(
@@ -55,8 +64,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Suggest audiences error:', error);
-    const message = error instanceof Error ? error.message : 'Error al sugerir audiencias';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleApiError(error, { route: 'ai/suggest-audiences' });
   }
 }

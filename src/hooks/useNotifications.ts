@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { toast } from 'sonner';
 import type { Notification } from '@/types';
 
 export function useNotifications() {
@@ -16,7 +17,7 @@ export function useNotifications() {
       setNotifications(data.notifications);
       setUnreadCount(data.unread_count);
     } catch {
-      // Silently fail on network errors
+      toast.error('Error al cargar las notificaciones');
     } finally {
       setLoading(false);
     }

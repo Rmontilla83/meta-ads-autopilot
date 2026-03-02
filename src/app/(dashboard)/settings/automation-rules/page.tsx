@@ -16,8 +16,11 @@ import {
 } from '@/components/ui/table';
 import { useUser } from '@/hooks/useUser';
 import { createClient } from '@/lib/supabase/client';
-import { RuleBuilderModal } from '@/components/automation/rule-builder-modal';
-import { RuleHistoryModal } from '@/components/automation/rule-history-modal';
+import { toast } from 'sonner';
+import dynamic from 'next/dynamic';
+
+const RuleBuilderModal = dynamic(() => import('@/components/automation/rule-builder-modal').then(m => m.RuleBuilderModal));
+const RuleHistoryModal = dynamic(() => import('@/components/automation/rule-history-modal').then(m => m.RuleHistoryModal));
 import type { AutomationRule, Campaign } from '@/types';
 
 const METRIC_LABELS: Record<string, string> = {
@@ -119,8 +122,8 @@ export default function AutomationRulesPage() {
           }
         }
       }
-    } catch (error) {
-      console.error('Error suggesting rules:', error);
+    } catch {
+      toast.error('Error al generar sugerencias de reglas');
     } finally {
       setSuggesting(false);
     }

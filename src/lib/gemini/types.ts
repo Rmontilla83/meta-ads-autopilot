@@ -49,6 +49,13 @@ export interface TargetingConfig {
   excluded_interests?: Array<{ id: string; name: string }>;
 }
 
+export interface CarouselCard {
+  image_url: string;
+  headline?: string;
+  description?: string;
+  destination_url?: string;
+}
+
 export interface GeneratedAd {
   name: string;
   format: 'single_image' | 'carousel' | 'video';
@@ -57,6 +64,9 @@ export interface GeneratedAd {
   description: string;
   call_to_action: string;
   destination_url?: string;
+  image_url?: string;
+  video_url?: string;
+  carousel_images?: CarouselCard[];
 }
 
 export interface GeneratedCampaign {

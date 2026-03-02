@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
 import { getPlanLimits } from '@/lib/plans';
 import type { Profile, BusinessProfile, MetaConnection, PlanLimits } from '@/types';
 import type { User } from '@supabase/supabase-js';
@@ -47,8 +48,8 @@ export function useUser(): UseUserReturn {
       setProfile(profileRes.data as Profile | null);
       setBusinessProfile(businessRes.data as BusinessProfile | null);
       setMetaConnection(metaRes.data as MetaConnection | null);
-    } catch (error) {
-      console.error('Error fetching user data:', error);
+    } catch {
+      toast.error('Error al cargar los datos del usuario');
     } finally {
       setLoading(false);
     }

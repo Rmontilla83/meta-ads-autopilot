@@ -6,12 +6,21 @@ import { ArrowLeft, Rocket, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MultiplyMode } from '@/components/campaigns/bulk/multiply-mode';
-import { CSVMode } from '@/components/campaigns/bulk/csv-mode';
-import { AIMode } from '@/components/campaigns/bulk/ai-mode';
+import dynamic from 'next/dynamic';
+import { Loader2 } from 'lucide-react';
 import { PreviewTable } from '@/components/campaigns/bulk/preview-table';
 import { BulkPublishModal } from '@/components/campaigns/bulk/bulk-publish-modal';
 import { SaveTemplateModal } from '@/components/campaigns/bulk/save-template-modal';
+
+const MultiplyMode = dynamic(() => import('@/components/campaigns/bulk/multiply-mode').then(m => m.MultiplyMode), {
+  loading: () => <div className="h-40 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
+const CSVMode = dynamic(() => import('@/components/campaigns/bulk/csv-mode').then(m => m.CSVMode), {
+  loading: () => <div className="h-40 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
+const AIMode = dynamic(() => import('@/components/campaigns/bulk/ai-mode').then(m => m.AIMode), {
+  loading: () => <div className="h-40 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>,
+});
 import type { GeneratedCampaign } from '@/lib/gemini/types';
 
 export default function BulkCreatePage() {

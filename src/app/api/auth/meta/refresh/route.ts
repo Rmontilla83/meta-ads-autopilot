@@ -1,28 +1,28 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
+import { handleApiError, rateLimitResponse } from '@/lib/api-errors';
+import { rateLimit } from '@/lib/rate-limit';
 import { decrypt, encrypt } from '@/lib/encryption';
 import { refreshLongLivedToken } from '@/lib/meta/oauth';
 
 export async function POST() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-  }
-
-  const { data: connection } = await supabase
-    .from('meta_connections')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!connection) {
-    return NextResponse.json({ error: 'No hay conexión activa' }, { status: 404 });
-  }
-
   try {
+    const { user, supabase } = await requireAuth();
+
+    const { success, resetAt } = await rateLimit(`meta-refresh:${user.id}`, { maxRequests: 5, windowMs: 60_000 });
+    if (!success) return rateLimitResponse(resetAt);
+
+    const { data: connection } = await supabase
+      .from('meta_connections')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+
+    if (!connection) {
+      return NextResponse.json({ error: 'No hay conexión activa' }, { status: 404 });
+    }
+
     const currentToken = decrypt(connection.access_token_encrypted);
     const refreshed = await refreshLongLivedToken(currentToken);
 
@@ -39,8 +39,7 @@ export async function POST() {
       .eq('id', connection.id);
 
     return NextResponse.json({ success: true, expires_at: expiresAt.toISOString() });
-  } catch (err) {
-    console.error('Token refresh error:', err);
-    return NextResponse.json({ error: 'Error al refrescar token' }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, { route: 'auth-meta-refresh' });
   }
 }

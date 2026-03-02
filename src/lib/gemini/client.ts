@@ -1,7 +1,7 @@
-import { GoogleGenerativeAI, type GenerativeModel } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { type ZodType } from 'zod';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 // Simple in-memory rate limiter
 let callCount = 0;
@@ -20,25 +20,26 @@ function checkRateLimit() {
   }
 }
 
-export function getGeminiFlash(): GenerativeModel {
-  return genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+// Model name helpers — kept as functions for backward compatibility with callers
+export type GeminiModel = string;
+
+export function getGeminiFlash(): GeminiModel {
+  return 'gemini-2.5-flash';
 }
 
-export function getGeminiPro(): GenerativeModel {
-  return genAI.getGenerativeModel({ model: 'gemini-2.0-pro' });
+export function getGeminiPro(): GeminiModel {
+  return 'gemini-2.5-pro';
 }
 
 export async function generateStructuredJSON<T>(
-  model: GenerativeModel,
+  model: GeminiModel,
   systemPrompt: string,
   userMessage: string,
   schema: ZodType<T>
 ): Promise<T> {
   checkRateLimit();
 
-  const fullPrompt = `${systemPrompt}
-
-IMPORTANTE: Responde ÚNICAMENTE con JSON válido, sin markdown, sin backticks, sin texto adicional.
+  const userContent = `IMPORTANTE: Responde ÚNICAMENTE con JSON válido, sin markdown, sin backticks, sin texto adicional.
 
 ${userMessage}`;
 
@@ -48,8 +49,14 @@ ${userMessage}`;
   while (attempts < maxAttempts) {
     attempts++;
     try {
-      const result = await model.generateContent(fullPrompt);
-      const text = result.response.text();
+      const response = await ai.models.generateContent({
+        model,
+        contents: userContent,
+        config: {
+          systemInstruction: systemPrompt,
+        },
+      });
+      const text = response.text ?? '';
 
       // Clean potential markdown wrapping
       const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
@@ -66,33 +73,124 @@ ${userMessage}`;
 }
 
 export async function* streamChat(
-  model: GenerativeModel,
+  model: GeminiModel,
   systemPrompt: string,
   history: Array<{ role: string; content: string }>,
   userMessage: string
 ): AsyncGenerator<string> {
   checkRateLimit();
 
-  const contents = history.map((msg) => ({
-    role: msg.role === 'assistant' ? 'model' : 'user',
+  const chatHistory = history.map((msg) => ({
+    role: msg.role === 'assistant' ? ('model' as const) : ('user' as const),
     parts: [{ text: msg.content }],
   }));
 
-  contents.push({ role: 'user', parts: [{ text: userMessage }] });
-
-  const chat = model.startChat({
-    history: contents.slice(0, -1),
-    systemInstruction: systemPrompt,
+  const chat = ai.chats.create({
+    model,
+    history: chatHistory,
+    config: {
+      systemInstruction: systemPrompt,
+    },
   });
 
-  const result = await chat.sendMessageStream(userMessage);
+  const stream = await chat.sendMessageStream({
+    message: userMessage,
+  });
 
-  for await (const chunk of result.stream) {
-    const text = chunk.text();
+  for await (const chunk of stream) {
+    const text = chunk.text;
     if (text) {
       yield text;
     }
   }
+}
+
+export async function generateMultimodalJSON<T>(
+  model: GeminiModel,
+  systemPrompt: string,
+  userMessage: string,
+  imageParts: Array<{ inlineData: { data: string; mimeType: string } }>,
+  schema: ZodType<T>
+): Promise<T> {
+  checkRateLimit();
+
+  const userContent = `IMPORTANTE: Responde ÚNICAMENTE con JSON válido, sin markdown, sin backticks, sin texto adicional.
+
+${userMessage}`;
+
+  let attempts = 0;
+  const maxAttempts = 2;
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: userContent },
+              ...imageParts,
+            ],
+          },
+        ],
+        config: {
+          systemInstruction: systemPrompt,
+        },
+      });
+      const text = response.text ?? '';
+
+      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+      return schema.parse(parsed);
+    } catch (error) {
+      if (attempts >= maxAttempts) {
+        throw wrapError(error);
+      }
+    }
+  }
+
+  throw new Error('No se pudo generar una respuesta válida. Intenta de nuevo.');
+}
+
+export async function generateAdImage(
+  prompt: string,
+  aspectRatio?: string
+): Promise<{ imageData: string; mimeType: string }> {
+  checkRateLimit();
+
+  const enhancedPrompt = `Create a professional advertising image for social media ads.
+The image should be commercial quality, brand-safe, vibrant colors, clean composition.
+IMPORTANT: Do NOT include any text overlays, watermarks, or written words in the image (Meta Ads policy).
+The image should be photorealistic and suitable for a paid advertisement.
+
+Image description: ${prompt}`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash-image',
+    contents: enhancedPrompt,
+    config: {
+      responseModalities: ['TEXT', 'IMAGE'],
+      ...(aspectRatio ? { imageGenerationConfig: { outputImageCount: 1, aspectRatio } } : { imageGenerationConfig: { outputImageCount: 1 } }),
+    },
+  });
+
+  const parts = response.candidates?.[0]?.content?.parts;
+  if (!parts) {
+    throw new Error('No se recibió respuesta del modelo de generación de imágenes.');
+  }
+
+  for (const part of parts) {
+    if (part.inlineData) {
+      return {
+        imageData: part.inlineData.data!,
+        mimeType: part.inlineData.mimeType || 'image/png',
+      };
+    }
+  }
+
+  throw new Error('No se generó ninguna imagen. Intenta con una descripción diferente.');
 }
 
 function wrapError(error: unknown): Error {

@@ -20,6 +20,7 @@ const FEATURE_LABELS: Record<string, string> = {
   pdf_reports: 'reportes PDF',
   bulk_create: 'creación masiva',
   advanced_analytics: 'analíticas avanzadas',
+  smart_scheduling: 'Smart Scheduling',
 };
 
 interface UpgradeModalProps {

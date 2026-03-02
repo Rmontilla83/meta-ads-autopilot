@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
+import { handleApiError, rateLimitResponse } from '@/lib/api-errors';
+import { rateLimit } from '@/lib/rate-limit';
 import { checkPlanLimit } from '@/lib/plan-limits';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const { success, resetAt } = await rateLimit(`rules-get:${user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    if (!success) return rateLimitResponse(resetAt);
 
     const { data: rules, error } = await supabase
       .from('automation_rules')
@@ -23,19 +23,16 @@ export async function GET() {
 
     return NextResponse.json({ rules: rules || [] });
   } catch (error) {
-    console.error('Rules GET error:', error);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return handleApiError(error, { route: 'automation-rules-GET' });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const { success, resetAt } = await rateLimit(`rules-post:${user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    if (!success) return rateLimitResponse(resetAt);
 
     // Check auto_optimizer feature access
     const limitCheck = await checkPlanLimit(user.id, 'auto_optimizer');
@@ -74,7 +71,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ rule });
   } catch (error) {
-    console.error('Rules POST error:', error);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return handleApiError(error, { route: 'automation-rules-POST' });
   }
 }

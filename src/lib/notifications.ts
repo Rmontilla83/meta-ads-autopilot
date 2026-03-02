@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function createNotification(params: {
   user_id: string;
-  type: 'rule_executed' | 'campaign_published' | 'campaign_error' | 'budget_alert' | 'performance_alert' | 'system';
+  type: 'rule_executed' | 'campaign_published' | 'campaign_error' | 'budget_alert' | 'performance_alert' | 'system' | 'ab_test_winner' | 'creative_fatigue' | 'scaling_alert' | 'funnel_published';
   title: string;
   message: string;
   metadata?: Record<string, unknown>;

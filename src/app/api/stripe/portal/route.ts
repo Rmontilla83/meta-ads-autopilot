@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth-utils';
+import { handleApiError, rateLimitResponse } from '@/lib/api-errors';
+import { rateLimit } from '@/lib/rate-limit';
 import { stripe } from '@/lib/stripe';
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { user, supabase } = await requireAuth();
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const { success, resetAt } = await rateLimit(`stripe-portal:${user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    if (!success) return rateLimitResponse(resetAt);
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -30,8 +30,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error('Portal error:', error);
-    const message = error instanceof Error ? error.message : 'Error al abrir portal';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleApiError(error, { route: 'stripe-portal' });
   }
 }

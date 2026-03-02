@@ -3,22 +3,28 @@
 import { getPlanLimits, PLANS } from '@/lib/plans';
 import type { PlanLimits } from '@/types';
 
+type BooleanFeature = {
+  [K in keyof PlanLimits]: PlanLimits[K] extends boolean ? K : never;
+}[keyof PlanLimits];
+
+type NumericLimit = {
+  [K in keyof PlanLimits]: PlanLimits[K] extends number ? K : never;
+}[keyof PlanLimits];
+
 export function usePlan(plan: string = 'free') {
   // Normalize: treat 'professional' as 'growth'
   const normalizedPlan = plan === 'professional' ? 'growth' : plan;
   const limits = getPlanLimits(normalizedPlan);
   const planInfo = PLANS[normalizedPlan] || PLANS.free;
 
-  const isWithinLimit = (resource: keyof PlanLimits, current: number): boolean => {
+  const isWithinLimit = (resource: NumericLimit, current: number): boolean => {
     const limit = limits[resource];
-    if (typeof limit === 'boolean') return limit;
-    if (typeof limit === 'number' && limit === -1) return true;
-    if (typeof limit === 'number') return current < limit;
-    return true;
+    if (limit === -1) return true;
+    return current < limit;
   };
 
-  const canUseFeature = (feature: 'autoOptimizer' | 'pdfReports' | 'bulkCreate' | 'advancedAnalytics'): boolean => {
-    return limits[feature];
+  const canUseFeature = (feature: BooleanFeature): boolean => {
+    return !!limits[feature];
   };
 
   return {

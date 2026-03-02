@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,7 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Separator } from '@/components/ui/separator';
 import { ArrowRight, Building2 } from 'lucide-react';
+import { BrandIdentityForm } from '@/components/brand/brand-identity-form';
+import type { BrandColors, BrandAnalysis } from '@/types';
 
 const businessSchema = z.object({
   business_name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
@@ -21,30 +25,57 @@ const businessSchema = z.object({
 
 export type BusinessFormData = z.infer<typeof businessSchema>;
 
+export interface BrandFormData {
+  logo_url: string | null;
+  brand_colors: BrandColors | null;
+  brand_typography: string | null;
+}
+
 const industries = [
-  'E-commerce / Tienda Online',
-  'Servicios Profesionales',
-  'Restaurante / Alimentos',
-  'Salud y Bienestar',
-  'Educación / Cursos',
-  'Tecnología / SaaS',
-  'Bienes Raíces',
-  'Moda y Belleza',
-  'Deportes y Fitness',
-  'Entretenimiento',
+  'Agricultura / Agroindustria',
+  'Alimentos y Bebidas',
   'Automotriz',
+  'Bienes Raíces / Inmobiliaria',
+  'Construcción / Arquitectura',
+  'Consultoría / Asesoría',
+  'Contabilidad / Legal',
+  'Deportes y Fitness',
+  'E-commerce / Tienda Online',
+  'Educación / Cursos',
+  'Energía / Medio Ambiente',
+  'Entretenimiento / Eventos',
+  'Farmacia / Productos Médicos',
+  'Finanzas / Seguros / Banca',
+  'Fotografía / Producción Audiovisual',
+  'Hotelería / Hospedaje',
+  'Logística / Transporte / Envíos',
+  'Marketing / Publicidad / Diseño',
+  'Mascotas / Veterinaria',
+  'Moda / Belleza / Cosmética',
+  'ONG / Sin fines de lucro',
+  'Restaurante / Cafetería',
+  'Salud y Bienestar',
+  'Servicios de Limpieza / Mantenimiento',
+  'Servicios Profesionales',
+  'Telecomunicaciones / Internet / ISP',
+  'Tecnología / Software / SaaS',
   'Viajes y Turismo',
-  'Finanzas / Seguros',
-  'Construcción',
   'Otro',
 ];
 
 interface Step1Props {
   defaultValues?: Partial<BusinessFormData>;
-  onNext: (data: BusinessFormData) => void;
+  defaultBrand?: Partial<BrandFormData>;
+  onNext: (data: BusinessFormData, brand: BrandFormData) => void;
 }
 
-export function Step1Business({ defaultValues, onNext }: Step1Props) {
+export function Step1Business({ defaultValues, defaultBrand, onNext }: Step1Props) {
+  const [brandData, setBrandData] = useState<BrandFormData>({
+    logo_url: defaultBrand?.logo_url || null,
+    brand_colors: defaultBrand?.brand_colors || null,
+    brand_typography: defaultBrand?.brand_typography || null,
+  });
+
   const form = useForm<BusinessFormData>({
     resolver: zodResolver(businessSchema),
     defaultValues: {
@@ -71,7 +102,7 @@ export function Step1Business({ defaultValues, onNext }: Step1Props) {
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onNext)} className="space-y-4">
+        <form onSubmit={form.handleSubmit((data) => onNext(data, brandData))} className="space-y-4">
           <FormField
             control={form.control}
             name="business_name"
@@ -171,6 +202,29 @@ export function Step1Business({ defaultValues, onNext }: Step1Props) {
                 <FormMessage />
               </FormItem>
             )}
+          />
+
+          <Separator className="my-2" />
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold">Identidad de Marca (opcional)</h3>
+            <p className="text-xs text-muted-foreground">
+              Sube tu logo y define tus colores para que la IA genere anuncios alineados a tu marca.
+            </p>
+          </div>
+          <BrandIdentityForm
+            compact
+            logoUrl={brandData.logo_url}
+            brandFiles={[]}
+            brandColors={brandData.brand_colors}
+            brandTypography={brandData.brand_typography}
+            brandGallery={[]}
+            brandAnalysis={null}
+            onLogoChange={(url) => setBrandData(prev => ({ ...prev, logo_url: url }))}
+            onBrandFilesChange={() => {}}
+            onBrandColorsChange={(colors) => setBrandData(prev => ({ ...prev, brand_colors: colors }))}
+            onBrandTypographyChange={(typo) => setBrandData(prev => ({ ...prev, brand_typography: typo }))}
+            onBrandGalleryChange={() => {}}
+            onBrandAnalysisChange={() => {}}
           />
 
           <Button type="submit" className="w-full">

@@ -30,6 +30,13 @@ export function TabBudget({ data, onChange }: TabBudgetProps) {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-lg border bg-muted/40 px-4 py-3 space-y-1">
+        <h3 className="text-sm font-semibold">Presupuesto</h3>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Aquí defines <strong>cuánto quieres invertir por día</strong> en tu campaña. Meta nunca gastará más de este monto diario. Si tienes varios ad sets, puedes distribuir el presupuesto entre ellos: por ejemplo, asignar más dinero a la audiencia que creas más rentable. El mínimo recomendado es <strong>$5 USD/día</strong> para obtener datos significativos. Abajo verás una estimación de los resultados que podrías obtener.
+        </p>
+      </div>
+
       <div className="space-y-2">
         <Label>Presupuesto diario (USD)</Label>
         <div className="flex items-center gap-2">
